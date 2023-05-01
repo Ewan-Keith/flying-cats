@@ -23,3 +23,11 @@ lazy val echo = (project in file("modules/flying-cats-echo"))
     name := "flying-cats-echo",
     commonSettings
   )
+
+lazy val uid = (project in file("modules/flying-cats-uid"))
+  .enablePlugins(NativeImagePlugin)
+  .settings(
+    Compile / mainClass := Some("com.github.flyingcats.uid.Main"),
+    name := "flying-cats-uid",
+    commonSettings
+  )
