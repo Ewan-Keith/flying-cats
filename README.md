@@ -7,5 +7,5 @@ native executable can be built by calling:
 sbt nativeImage
 ```
 
-and then found under `target/native-image/flying-cats`.
+The build for each module can then be found under `modules/<module-name>/target/native-image/<module-name>`.
 
