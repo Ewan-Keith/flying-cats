@@ -12,22 +12,35 @@ lazy val commonDependencies = Seq(
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= commonDependencies,
+)
+
+lazy val nativeImageSettings = Seq(
   nativeImageOptions += "--no-fallback",
   nativeImageVersion := "22.1.0" // It should be at least version 21.0.0
 )
 
+lazy val common = (project in file("modules/flying-cats-common"))
+  .settings(
+    name := "flying-cats-common",
+    commonSettings
+  )
+
 lazy val echo = (project in file("modules/flying-cats-echo"))
   .enablePlugins(NativeImagePlugin)
+  .dependsOn(common)
   .settings(
     Compile / mainClass := Some("com.github.flyingcats.echo.Main"),
     name := "flying-cats-echo",
-    commonSettings
+    commonSettings,
+    nativeImageSettings
   )
 
 lazy val uid = (project in file("modules/flying-cats-uid"))
   .enablePlugins(NativeImagePlugin)
+  .dependsOn(common)
   .settings(
     Compile / mainClass := Some("com.github.flyingcats.uid.Main"),
     name := "flying-cats-uid",
-    commonSettings
+    commonSettings,
+    nativeImageSettings
   )
