@@ -73,19 +73,12 @@ object GenerateDecoders {
 
 object Main extends IOApp.Simple {
 
-  def getUidDecoder(
-      messageType: MaelstromMessageType
-  ): Either[Throwable, Decoder[MaelstromMessage]] = messageType match {
-    case Generate => Right(GenerateDecoders.decodeMessage.widen)
-    case v =>
-      Left(
-        new RuntimeException(
-          s"Received unexpected message type for the generate module: $v"
-        )
-      )
-  }
+  val generateDecoder
+      : PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
+        MaelstromMessage
+      ]]] = { case Generate => Right(GenerateDecoders.decodeMessage.widen) }
 
-  def generateMessageResponse(echo: MaelstromMessage): IO[Unit] = echo match {
+  val generateMessageResponse: PartialFunction[MaelstromMessage, IO[Unit]] = {
     case GenerateMessage(src, dest, gbody) =>
       IO.println(
         GenerateResponseMessage(
@@ -98,14 +91,8 @@ object Main extends IOApp.Simple {
           )
         ).asJson(GenerateDecoders.encodeResponseMessage).noSpaces
       )
-    case e =>
-      IO.raiseError(
-        new RuntimeException(
-          s"uid node did not expect to receive message of type: $e"
-        )
-      )
   }
 
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(getUidDecoder, generateMessageResponse)
+    MaelstromApp.buildAppLoop(generateDecoder, generateMessageResponse)
 }

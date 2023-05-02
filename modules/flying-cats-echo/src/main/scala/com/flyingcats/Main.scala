@@ -74,19 +74,13 @@ object EchoDecoders {
 }
 
 object Main extends IOApp.Simple {
-  def getEchoDecoder(
-      messageType: MaelstromMessageType
-  ): Either[Throwable, Decoder[MaelstromMessage]] = messageType match {
-    case Echo => Right(EchoDecoders.decodeMessage.widen)
-    case v =>
-      Left(
-        new RuntimeException(
-          s"Received unexpected message type for the echo module: $v"
-        )
-      )
-  }
 
-  def echoMessageResponse(echo: MaelstromMessage): IO[Unit] = echo match {
+  val echoDecoder
+      : PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
+        MaelstromMessage
+      ]]] = { case Echo => Right(EchoDecoders.decodeMessage.widen) }
+
+  val echoMessageResponse: PartialFunction[MaelstromMessage, IO[Unit]] = {
     case EchoMessage(src, dest, ebody) =>
       IO.println(
         EchoResponseMessage(
@@ -99,14 +93,8 @@ object Main extends IOApp.Simple {
           )
         ).asJson(EchoDecoders.encodeResponseMessage).noSpaces
       )
-    case e =>
-      IO.raiseError(
-        new RuntimeException(
-          s"echo node did not expect to receive message of type: $e"
-        )
-      )
   }
 
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(getEchoDecoder, echoMessageResponse)
+    MaelstromApp.buildAppLoop(echoDecoder, echoMessageResponse)
 }
