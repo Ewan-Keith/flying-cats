@@ -3,7 +3,7 @@ package com.github.flyingcats.common
 import cats.effect.{IO, Ref}
 import io.circe.syntax._
 import io.circe._, io.circe.parser._
-import com.github.flyingcats.common.MaelstromApp.{respond, logReceived}
+import com.github.flyingcats.common.Messenger._
 
 case class InitMessage(src: String, dest: String, body: InitBody)
     extends MaelstromMessage

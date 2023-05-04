@@ -10,6 +10,7 @@ import com.github.flyingcats.common.{
   MaelstromMessageBody,
   MaelstromMessageType
 }
+import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 
 case class EchoMessage(src: String, dest: String, body: EchoBody)
@@ -82,7 +83,7 @@ object Main extends IOApp.Simple {
 
   val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (EchoMessage(src, dest, ebody), _) =>
-      IO.println(
+      respond(
         EchoResponseMessage(
           dest,
           src,

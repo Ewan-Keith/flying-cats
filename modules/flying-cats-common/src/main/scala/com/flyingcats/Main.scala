@@ -5,11 +5,10 @@ import io.circe._, io.circe.parser._
 import io.circe.syntax._
 import cats.syntax.functor._
 import java.nio.file.Files
-import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 import fs2.{Stream, io, text}
 import cats.effect
-import java.nio.file.Path
+import com.github.flyingcats.common.Messenger._
 
 trait MaelstromMessage {
   val src: String
@@ -129,24 +128,4 @@ object MaelstromApp {
       )
     }
 
-  private val debugFileLocation: Option[Path] =
-    None
-  private val debugEnabled: Boolean = debugFileLocation.isDefined
-
-  def debugLog(s: String): IO[Unit] =
-    IO.fromOption(debugFileLocation)(
-      new RuntimeException(
-        "attempted to call debugLog method without a debugFileLocation set"
-      )
-    ).map(dfl =>
-      IO {
-        Files.write(dfl, s"$s\n".getBytes(), StandardOpenOption.APPEND)
-      }
-    )
-
-  def logReceived(s: String): IO[Unit] =
-    IO.whenA(debugEnabled)(debugLog(s"received: $s"))
-
-  def respond(s: String): IO[Unit] =
-    IO.whenA(debugEnabled)(debugLog(s"response: $s")) >> IO.println(s)
 }

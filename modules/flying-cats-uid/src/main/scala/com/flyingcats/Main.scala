@@ -10,6 +10,7 @@ import com.github.flyingcats.common.{
   MaelstromMessageBody,
   MaelstromMessageType
 }
+import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 
 case class GenerateMessage(src: String, dest: String, body: GenerateBody)
@@ -80,7 +81,7 @@ object Main extends IOApp.Simple {
 
   val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (GenerateMessage(src, dest, gbody), _) =>
-      IO.println(
+      respond(
         GenerateResponseMessage(
           dest,
           src,

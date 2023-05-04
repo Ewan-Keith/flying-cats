@@ -10,12 +10,9 @@ import com.github.flyingcats.common.{
   MaelstromMessageBody,
   MaelstromMessageType
 }
-import com.github.flyingcats.common.MaelstromApp.respond
+import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 import com.github.flyingcats.common.NodeState
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
 
 case class BroadcastMessage(src: String, dest: String, body: BroadcastBody)
     extends MaelstromMessage
