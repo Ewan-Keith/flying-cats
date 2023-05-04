@@ -1,7 +1,7 @@
 package com.github.flyingcats.uid
 
 import cats.effect.{IO, IOApp}
-import io.circe._, io.circe.parser._
+import io.circe._
 import io.circe.syntax._
 import cats.syntax.functor._
 import com.github.flyingcats.common.{
@@ -18,9 +18,7 @@ case class GenerateMessage(src: String, dest: String, body: GenerateBody)
 
 case class GenerateBody(
     messageId: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Generate
-}
+) extends MaelstromMessageBody
 
 case class GenerateResponseMessage(
     src: String,
@@ -32,9 +30,7 @@ case class GenerateResponseBody(
     messageId: Int,
     inReplyTo: Int,
     id: String
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Generate
-}
+) extends MaelstromMessageBody
 
 object GenerateDecoders {
 

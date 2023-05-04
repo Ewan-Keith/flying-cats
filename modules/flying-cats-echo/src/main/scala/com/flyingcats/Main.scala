@@ -1,7 +1,7 @@
 package com.github.flyingcats.echo
 
 import cats.effect.{IO, IOApp}
-import io.circe._, io.circe.parser._
+import io.circe._
 import io.circe.syntax._
 import cats.syntax.functor._
 import com.github.flyingcats.common.{
@@ -19,9 +19,7 @@ case class EchoMessage(src: String, dest: String, body: EchoBody)
 case class EchoBody(
     messageId: Int,
     echo: String
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Echo
-}
+) extends MaelstromMessageBody
 
 case class EchoResponseMessage(
     src: String,
@@ -33,9 +31,7 @@ case class EchoResponseBody(
     messageId: Int,
     inReplyTo: Int,
     echo: String
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Echo
-}
+) extends MaelstromMessageBody
 
 object EchoDecoders {
 

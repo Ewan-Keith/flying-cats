@@ -1,11 +1,8 @@
 package com.github.flyingcats.common
 
-import cats.effect.{IO, IOApp, Ref}
+import cats.effect.{IO, Ref}
 import io.circe._, io.circe.parser._
-import io.circe.syntax._
-import cats.syntax.functor._
-import fs2.{Stream, io, text}
-import cats.effect
+import fs2.{io, text}
 import com.github.flyingcats.common.Messenger._
 
 trait MaelstromMessage {
@@ -14,9 +11,7 @@ trait MaelstromMessage {
   val body: MaelstromMessageBody
 }
 
-trait MaelstromMessageBody {
-  val messageType: MaelstromMessageType
-}
+trait MaelstromMessageBody
 
 sealed trait MaelstromMessageType
 object MaelstromMessageType {
@@ -45,7 +40,7 @@ object MaelstromMessageType {
 
 object MaelstromApp {
 
-  def mainLoop[A](
+  private def mainLoop[A](
       decoderLookup: PartialFunction[
         MaelstromMessageType,
         Either[Throwable, Decoder[
@@ -75,34 +70,37 @@ object MaelstromApp {
         case None =>
           IO.raiseError(
             new RuntimeException(
-              s"node did not expect to receive message of type: ${message.body.messageType}"
+              s"node received unexpected message type: $message"
             )
           )
         case Some(value) => value
       }
 
-    val stream: Stream[IO, Unit] =
-      io.stdin[IO](4096)
-        .through((text.utf8Decode))
-        .through(text.lines)
-        .evalTap(logReceived)
-        .map(_.trim)
-        .evalMap { s => IO.fromEither(parse(s)) }
-        .evalMap { j =>
-          for {
-            ts <- IO.fromEither(
-              j.hcursor.downField("body").downField("type").as[String]
-            )
-            messageType <- IO.fromEither(
-              MaelstromMessageType.getMessageType(ts)
-            )
-            d <- getDecoder(messageType)
-            m <- IO.fromEither(j.as(d))
-          } yield m
-        }
-        .evalMap(react)
+    def decodeMessage(json: Json): IO[MaelstromMessage] = for {
+      typeString <- IO.fromEither(
+        json.hcursor.downField("body").downField("type").as[String]
+      )
+      messageType <- IO.fromEither(
+        MaelstromMessageType.getMessageType(typeString)
+      )
+      decoder <- getDecoder(messageType)
+      message <- IO.fromEither(json.as(decoder))
+    } yield message
 
-    stream.compile.drain
+    def decodeMessageAndReact(messageString: String): IO[Unit] = for {
+      json <- IO.fromEither(parse(messageString))
+      message <- decodeMessage(json)
+      _ <- react(message)
+    } yield ()
+
+    io.stdin[IO](4096)
+      .through((text.utf8.decode))
+      .through(text.lines)
+      .evalTap(logReceived)
+      .map(_.trim)
+      .evalMap(decodeMessageAndReact)
+      .compile
+      .drain
   }
 
   def buildAppLoop[A](

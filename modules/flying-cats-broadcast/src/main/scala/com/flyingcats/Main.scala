@@ -1,7 +1,7 @@
 package com.github.flyingcats.broadcast
 
 import cats.effect.{IO, IOApp, Ref}
-import io.circe._, io.circe.parser._
+import io.circe._
 import io.circe.syntax._
 import cats.syntax.functor._
 import com.github.flyingcats.common.{
@@ -20,9 +20,7 @@ case class BroadcastMessage(src: String, dest: String, body: BroadcastBody)
 case class BroadcastBody(
     message: Json,
     messageId: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Broadcast
-}
+) extends MaelstromMessageBody
 
 case class BroadcastResponseMessage(
     src: String,
@@ -31,10 +29,8 @@ case class BroadcastResponseMessage(
 ) extends MaelstromMessage
 
 case class BroadcastResponseBody(
-  inReplyTo: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Broadcast
-}
+    inReplyTo: Int
+) extends MaelstromMessageBody
 
 object BroadcastDecoders {
 
@@ -75,10 +71,8 @@ case class ReadMessage(src: String, dest: String, body: ReadBody)
     extends MaelstromMessage
 
 case class ReadBody(
-  messageId: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Read
-}
+    messageId: Int
+) extends MaelstromMessageBody
 
 case class ReadResponseMessage(
     src: String,
@@ -89,9 +83,7 @@ case class ReadResponseMessage(
 case class ReadResponseBody(
     messages: Vector[Json],
     inReplyTo: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Read
-}
+) extends MaelstromMessageBody
 
 object ReadDecoders {
 
@@ -137,9 +129,7 @@ case class TopologyMessage(
 case class TopologyBody(
     topology: Map[String, Vector[String]],
     messageId: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Topology
-}
+) extends MaelstromMessageBody
 
 case class TopologyResponseMessage(
     src: String,
@@ -149,9 +139,7 @@ case class TopologyResponseMessage(
 
 case class TopologyResponseBody(
     inReplyTo: Int
-) extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = Topology
-}
+) extends MaelstromMessageBody
 
 object TopologyDecoders {
 
@@ -186,7 +174,6 @@ object TopologyDecoders {
         topology <- c.downField("topology").as[Map[String, Vector[String]]]
         messageId <- c.downField("msg_id").as[Int]
       } yield TopologyBody(topology, messageId)
-
   }
 }
 
@@ -234,7 +221,7 @@ object Main extends IOApp.Simple {
           ).asJson(ReadDecoders.encodeResponseMessage).noSpaces
         )
       }
-    case (TopologyMessage(id, src, dest, tbody), _) =>
+    case (TopologyMessage(_, src, dest, tbody), _) =>
       respond(
         TopologyResponseMessage(
           dest,

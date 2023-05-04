@@ -9,9 +9,7 @@ case class InitMessage(src: String, dest: String, body: InitBody)
     extends MaelstromMessage
 
 case class InitBody(messageId: Int, nodeId: String, NodeIds: Vector[String])
-    extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = MaelstromMessageType.Init
-}
+    extends MaelstromMessageBody
 
 case class InitResponseMessage(
     src: String,
@@ -19,9 +17,7 @@ case class InitResponseMessage(
     body: InitResponseBody
 ) extends MaelstromMessage
 
-case class InitResponseBody() extends MaelstromMessageBody {
-  val messageType: MaelstromMessageType = MaelstromMessageType.InitOk
-}
+case class InitResponseBody() extends MaelstromMessageBody
 
 object InitCodecs {
 
