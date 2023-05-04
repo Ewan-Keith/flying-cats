@@ -80,8 +80,8 @@ object Main extends IOApp.Simple {
         MaelstromMessage
       ]]] = { case Echo => Right(EchoDecoders.decodeMessage.widen) }
 
-  val echoMessageResponse: PartialFunction[MaelstromMessage, IO[Unit]] = {
-    case EchoMessage(src, dest, ebody) =>
+  val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
+    case (EchoMessage(src, dest, ebody), _) =>
       IO.println(
         EchoResponseMessage(
           dest,
@@ -95,6 +95,8 @@ object Main extends IOApp.Simple {
       )
   }
 
+  def initEmptyState(): Unit = ()
+
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(echoDecoder, echoMessageResponse)
+    MaelstromApp.buildAppLoop(echoDecoder, echoMessageResponse, initEmptyState)
 }

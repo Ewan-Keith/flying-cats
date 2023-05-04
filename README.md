@@ -32,3 +32,30 @@ generate-uid:
 ./maelstrom/maelstrom test -w unique-ids --bin ~/Documents/projects/flying-cats/modules/flying-cats-uid/target/native-image/flying-cats-uid --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
 ```
 
+single-node-broadcast
+```
+./maelstrom/maelstrom test -w broadcast --bin ~/Documents/projects/flying-cats/modules/flying-cats-broadcast/target/native-image/flying-cats-broadcast --node-count 1 --time-limit 20 --rate 10
+```
+
+
+### example messages
+init
+```
+{"src": "c1", "dest": "n3", "body": {"type": "init",  "msg_id":   1,  "node_id":  "n3",  "node_ids": ["n1", "n2", "n3"]}}
+```
+
+read
+```
+{"src": "c1", "dest": "n3", "body": {"type": "read"}}
+```
+
+broadcast
+```
+{"src": "c1", "dest": "n3", "body": {"type": "broadcast", "message": 1000}}
+```
+
+topology
+```
+
+{"src": "c1", "dest": "n3", "body": {"type": "topology","topology": {"n1": ["n2", "n3"],"n2": ["n1"],"n3": ["n1"]}}}
+```

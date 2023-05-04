@@ -3,15 +3,18 @@ ThisBuild / organization := "com.github"
 ThisBuild / scalaVersion := "2.13.8"
 
 val circeVersion = "0.14.1"
+val fs2Version = "3.6.1"
 
 lazy val commonDependencies = Seq(
   "org.typelevel" %% "cats-effect" % "3.4.10",
   "io.circe" %% "circe-core" % circeVersion,
-  "io.circe" %% "circe-parser" % circeVersion
+  "io.circe" %% "circe-parser" % circeVersion,
+  "co.fs2" %% "fs2-core" % fs2Version,
+  "co.fs2" %% "fs2-io" % fs2Version
 )
 
 lazy val commonSettings = Seq(
-  libraryDependencies ++= commonDependencies,
+  libraryDependencies ++= commonDependencies
 )
 
 lazy val nativeImageSettings = Seq(
@@ -41,6 +44,16 @@ lazy val uid = (project in file("modules/flying-cats-uid"))
   .settings(
     Compile / mainClass := Some("com.github.flyingcats.uid.Main"),
     name := "flying-cats-uid",
+    commonSettings,
+    nativeImageSettings
+  )
+
+lazy val broadcast = (project in file("modules/flying-cats-broadcast"))
+  .enablePlugins(NativeImagePlugin)
+  .dependsOn(common)
+  .settings(
+    Compile / mainClass := Some("com.github.flyingcats.broadcast.Main"),
+    name := "flying-cats-broadcast",
     commonSettings,
     nativeImageSettings
   )

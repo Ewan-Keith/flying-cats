@@ -7,3 +7,4 @@ project/project
 project/metals.sbt
 maelstrom*
 store
+debug-file

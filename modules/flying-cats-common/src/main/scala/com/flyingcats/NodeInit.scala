@@ -1,8 +1,9 @@
 package com.github.flyingcats.common
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import io.circe.syntax._
 import io.circe._, io.circe.parser._
+import com.github.flyingcats.common.MaelstromApp.{respond, logReceived}
 
 case class InitMessage(src: String, dest: String, body: InitBody)
     extends MaelstromMessage
@@ -58,11 +59,12 @@ object InitCodecs {
   }
 }
 
+case class NodeState[A](id: String, state: A)
 object NodeInit {
-case class NodeState(id: String)
 
-  def initialise: IO[NodeState] = for {
+  def initialise[A](initState: () => A): IO[Ref[IO, NodeState[A]]] = for {
     inputString <- IO.readLine
+    _ <- logReceived(inputString)
     inputJson <- IO.fromEither(parse(inputString))
     initMessage <- IO.fromEither(
       inputJson.as[InitMessage](InitCodecs.decodeMessage)
@@ -72,10 +74,10 @@ case class NodeState(id: String)
       initMessage.src,
       InitResponseBody()
     )
-    _ <- IO.println(
+    _ <- respond(
       initResponse.asJson(InitCodecs.encodeResponseMessage).noSpaces
     )
-  } yield NodeState(initMessage.body.nodeId)
-
+    state <- Ref[IO].of(NodeState(initMessage.body.nodeId, initState()))
+  } yield state
 
 }
