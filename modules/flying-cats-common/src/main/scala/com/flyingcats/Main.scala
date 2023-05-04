@@ -4,8 +4,6 @@ import cats.effect.{IO, IOApp, Ref}
 import io.circe._, io.circe.parser._
 import io.circe.syntax._
 import cats.syntax.functor._
-import java.nio.file.Files
-import java.nio.file.StandardOpenOption
 import fs2.{Stream, io, text}
 import cats.effect
 import com.github.flyingcats.common.Messenger._
