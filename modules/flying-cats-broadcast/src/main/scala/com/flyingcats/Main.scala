@@ -2,10 +2,8 @@ package com.github.flyingcats.broadcast
 
 import cats.effect.{IO, IOApp, Ref}
 import io.circe._
-import io.circe.syntax._
 import cats.syntax.functor._
 import com.github.flyingcats.common._
-import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 import com.github.flyingcats.common.NodeState
 
@@ -16,26 +14,15 @@ case class BroadcastMessage(
     messageId: Int
 ) extends MaelstromMessage
 
-case class BroadcastResponseMessage(
-    src: String,
-    dest: String,
-    inReplyTo: Int
-) extends MaelstromMessage
+case class BroadcastResponse(inReplyTo: Int)
 
 object BroadcastDecoders {
 
-  def encodeResponseMessage: Encoder[BroadcastResponseMessage] =
-    new Encoder[BroadcastResponseMessage] {
-      final def apply(a: BroadcastResponseMessage): Json = Json.obj(
-        ("src", Json.fromString(a.src)),
-        ("dest", Json.fromString(a.dest)),
-        (
-          "body",
-          Json.obj(
-            ("type", Json.fromString("broadcast_ok")),
-            ("in_reply_to", Json.fromInt(a.inReplyTo))
-          )
-        )
+  def encodeResponseMessage: Encoder[BroadcastResponse] =
+    new Encoder[BroadcastResponse] {
+      final def apply(a: BroadcastResponse): Json = Json.obj(
+        ("type", Json.fromString("broadcast_ok")),
+        ("in_reply_to", Json.fromInt(a.inReplyTo))
       )
     }
 
@@ -44,7 +31,6 @@ object BroadcastDecoders {
       for {
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        // body <- c.downField("body").as[BroadcastBody]
         message <- c.downField("body").downField("message").as[Json]
         messageId <- c.downField("body").downField("msg_id").as[Int]
       } yield BroadcastMessage(src, dest, message, messageId)
@@ -54,28 +40,19 @@ object BroadcastDecoders {
 case class ReadMessage(src: String, dest: String, messageId: Int)
     extends MaelstromMessage
 
-case class ReadResponseMessage(
-    src: String,
-    dest: String,
+case class ReadResponse(
     messages: Vector[Json],
     inReplyTo: Int
-) extends MaelstromMessage
+)
 
 object ReadDecoders {
 
-  def encodeResponseMessage: Encoder[ReadResponseMessage] =
-    new Encoder[ReadResponseMessage] {
-      final def apply(a: ReadResponseMessage): Json = Json.obj(
-        ("src", Json.fromString(a.src)),
-        ("dest", Json.fromString(a.dest)),
-        (
-          "body",
-          Json.obj(
-            ("type", Json.fromString("read_ok")),
-            ("in_reply_to", Json.fromInt(a.inReplyTo)),
-            ("messages", Json.fromValues(a.messages.map(j => j)))
-          )
-        )
+  def encodeResponseMessage: Encoder[ReadResponse] =
+    new Encoder[ReadResponse] {
+      final def apply(a: ReadResponse): Json = Json.obj(
+        ("type", Json.fromString("read_ok")),
+        ("in_reply_to", Json.fromInt(a.inReplyTo)),
+        ("messages", Json.fromValues(a.messages.map(j => j)))
       )
     }
 
@@ -96,26 +73,15 @@ case class TopologyMessage(
     messageId: Int
 ) extends MaelstromMessage
 
-case class TopologyResponseMessage(
-    src: String,
-    dest: String,
-    inReplyTo: Int
-) extends MaelstromMessage
+case class TopologyResponse(inReplyTo: Int)
 
 object TopologyDecoders {
 
-  def encodeResponseMessage: Encoder[TopologyResponseMessage] =
-    new Encoder[TopologyResponseMessage] {
-      final def apply(a: TopologyResponseMessage): Json = Json.obj(
-        ("src", Json.fromString(a.src)),
-        ("dest", Json.fromString(a.dest)),
-        (
-          "body",
-          Json.obj(
-            ("type", Json.fromString("topology_ok")),
-            ("in_reply_to", Json.fromInt(a.inReplyTo))
-          )
-        )
+  def encodeResponseMessage: Encoder[TopologyResponse] =
+    new Encoder[TopologyResponse] {
+      final def apply(a: TopologyResponse): Json = Json.obj(
+        ("type", Json.fromString("topology_ok")),
+        ("in_reply_to", Json.fromInt(a.inReplyTo))
       )
     }
 
@@ -125,7 +91,10 @@ object TopologyDecoders {
         id <- c.downField("id").as[Int]
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        topology <- c.downField("body").downField("topology").as[Map[String, Vector[String]]]
+        topology <- c
+          .downField("body")
+          .downField("topology")
+          .as[Map[String, Vector[String]]]
         messageId <- c.downField("body").downField("msg_id").as[Int]
       } yield TopologyMessage(id, src, dest, topology, messageId)
   }
@@ -149,38 +118,28 @@ object Main extends IOApp.Simple {
     (MaelstromMessage, Ref[IO, NodeState[BroadcastNodeState]]),
     IO[Unit]
   ] = {
-    case (BroadcastMessage(src, dest, message, messageId), nstate) =>
+    case (b: BroadcastMessage, nstate) =>
       nstate.update(current =>
         NodeState(
           current.id,
-          BroadcastNodeState(current.state.messages.appended(message))
+          BroadcastNodeState(current.state.messages.appended(b.message))
         )
       ) >>
-        respond(
-          BroadcastResponseMessage(
-            dest,
-            src,
-            messageId
-          ).asJson(BroadcastDecoders.encodeResponseMessage).noSpaces
+        b.respond(
+          BroadcastResponse(b.messageId),
+          BroadcastDecoders.encodeResponseMessage
         )
-    case (ReadMessage(src, dest, messageId), nstate) =>
+    case (r: ReadMessage, nstate) =>
       nstate.get.map(_.state.messages).flatMap { m =>
-        respond(
-          ReadResponseMessage(
-            dest,
-            src,
-            m,
-            messageId
-          ).asJson(ReadDecoders.encodeResponseMessage).noSpaces
+        r.respond(
+          ReadResponse(m, r.messageId),
+          ReadDecoders.encodeResponseMessage
         )
       }
-    case (TopologyMessage(_, src, dest, _, messageId), _) =>
-      respond(
-        TopologyResponseMessage(
-          dest,
-          src,
-          messageId
-        ).asJson(TopologyDecoders.encodeResponseMessage).noSpaces
+    case (t: TopologyMessage, _) =>
+      t.respond(
+        TopologyResponse(t.messageId),
+        TopologyDecoders.encodeResponseMessage
       )
   }
 

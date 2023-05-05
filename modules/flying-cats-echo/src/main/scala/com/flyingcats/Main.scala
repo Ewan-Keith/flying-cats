@@ -2,40 +2,30 @@ package com.github.flyingcats.echo
 
 import cats.effect.{IO, IOApp}
 import io.circe._
-import io.circe.syntax._
 import cats.syntax.functor._
 import com.github.flyingcats.common._
-import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 
 case class EchoMessage(src: String, dest: String, messageId: Int, echo: String)
     extends MaelstromMessage
 
-case class EchoResponseMessage(
-    src: String,
-    dest: String,
+case class EchoResponse(
     messageId: Int,
     inReplyTo: Int,
     echo: String
-) extends MaelstromMessage
+)
 
 object EchoDecoders {
 
-  def encodeResponseMessage: Encoder[EchoResponseMessage] =
-    new Encoder[EchoResponseMessage] {
-      final def apply(a: EchoResponseMessage): Json = Json.obj(
-        ("src", Json.fromString(a.src)),
-        ("dest", Json.fromString(a.dest)),
-        (
-          "body",
-          Json.obj(
-            ("type", Json.fromString("echo_ok")),
-            ("msg_id", Json.fromInt(a.messageId)),
-            ("in_reply_to", Json.fromInt(a.inReplyTo)),
-            ("echo", Json.fromString(a.echo))
-          )
+  def encodeResponseMessage: Encoder[EchoResponse] =
+    new Encoder[EchoResponse] {
+      final def apply(a: EchoResponse): Json =
+        Json.obj(
+          ("type", Json.fromString("echo_ok")),
+          ("msg_id", Json.fromInt(a.messageId)),
+          ("in_reply_to", Json.fromInt(a.inReplyTo)),
+          ("echo", Json.fromString(a.echo))
         )
-      )
     }
 
   def decodeMessage: Decoder[EchoMessage] = new Decoder[EchoMessage] {
@@ -57,15 +47,14 @@ object Main extends IOApp.Simple {
       ]]] = { case Echo => Right(EchoDecoders.decodeMessage.widen) }
 
   val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
-    case (EchoMessage(src, dest, messageId, echo), _) =>
-      respond(
-        EchoResponseMessage(
-          dest,
-          src,
-          messageId,
-          messageId,
-          echo
-        ).asJson(EchoDecoders.encodeResponseMessage).noSpaces
+    case (e: EchoMessage, _) =>
+      e.respond(
+        EchoResponse(
+          e.messageId,
+          e.messageId,
+          e.echo
+        ),
+        EchoDecoders.encodeResponseMessage
       )
   }
 

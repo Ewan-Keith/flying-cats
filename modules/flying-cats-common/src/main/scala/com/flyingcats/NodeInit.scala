@@ -1,7 +1,6 @@
 package com.github.flyingcats.common
 
 import cats.effect.{IO, Ref}
-import io.circe.syntax._
 import io.circe._, io.circe.parser._
 import com.github.flyingcats.common.Messenger._
 
@@ -10,28 +9,18 @@ case class InitMessage(
     dest: String,
     messageId: Int,
     nodeId: String,
-    NodeIds: Vector[String]
+    nodeIds: Vector[String]
 ) extends MaelstromMessage
 
-case class InitResponseMessage(
-    src: String,
-    dest: String
-) extends MaelstromMessage
+case class InitResponse()
 
 object InitCodecs {
 
-  def encodeResponseMessage: Encoder[InitResponseMessage] =
-    new Encoder[InitResponseMessage] {
-      final def apply(a: InitResponseMessage): Json = Json.obj(
-        ("src", Json.fromString(a.src)),
-        ("dest", Json.fromString(a.dest)),
-        (
-          "body",
-          Json.obj(
-            ("type", Json.fromString("init_ok")),
-            ("in_reply_to", Json.fromInt(1))
-          )
-        )
+  def encodeResponse: Encoder[InitResponse] =
+    new Encoder[InitResponse] {
+      final def apply(a: InitResponse): Json = Json.obj(
+        ("type", Json.fromString("init_ok")),
+        ("in_reply_to", Json.fromInt(1))
       )
     }
 
@@ -48,6 +37,7 @@ object InitCodecs {
 }
 
 case class NodeState[A](id: String, state: A)
+
 object NodeInit {
 
   def initialise[A](initState: () => A): IO[Ref[IO, NodeState[A]]] = for {
@@ -57,14 +47,8 @@ object NodeInit {
     initMessage <- IO.fromEither(
       inputJson.as[InitMessage](InitCodecs.decodeMessage)
     )
-    initResponse = InitResponseMessage(
-      initMessage.dest,
-      initMessage.src
-    )
-    _ <- respond(
-      initResponse.asJson(InitCodecs.encodeResponseMessage).noSpaces
-    )
     state <- Ref[IO].of(NodeState(initMessage.nodeId, initState()))
+    _ <- initMessage.respond(InitResponse(), InitCodecs.encodeResponse)
   } yield state
 
 }

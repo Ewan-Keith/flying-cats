@@ -8,6 +8,16 @@ import com.github.flyingcats.common.Messenger._
 trait MaelstromMessage {
   val src: String
   val dest: String
+
+  def respond[A](body: A, encoder: Encoder[A]): IO[Unit] = sendMessage(
+    Json
+      .obj(
+        ("src", Json.fromString(dest)),
+        ("dest", Json.fromString(src)),
+        ("body", encoder(body))
+      )
+      .noSpaces
+  )
 }
 
 sealed trait MaelstromMessageType

@@ -30,6 +30,6 @@ object Messenger {
   def logReceived(s: String): IO[Unit] =
     debugEnabled.ifM(debugLog(s"received: $s"), IO.unit)
 
-  def respond(s: String): IO[Unit] =
+  def sendMessage(s: String): IO[Unit] =
     debugEnabled.ifM(debugLog(s"response: $s"), IO.unit) >> IO.println(s)
 }
