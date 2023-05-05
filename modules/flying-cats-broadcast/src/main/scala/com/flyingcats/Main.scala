@@ -4,33 +4,23 @@ import cats.effect.{IO, IOApp, Ref}
 import io.circe._
 import io.circe.syntax._
 import cats.syntax.functor._
-import com.github.flyingcats.common.{
-  MaelstromApp,
-  MaelstromMessage,
-  MaelstromMessageBody,
-  MaelstromMessageType
-}
+import com.github.flyingcats.common._
 import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 import com.github.flyingcats.common.NodeState
 
-case class BroadcastMessage(src: String, dest: String, body: BroadcastBody)
-    extends MaelstromMessage
-
-case class BroadcastBody(
+case class BroadcastMessage(
+    src: String,
+    dest: String,
     message: Json,
     messageId: Int
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 case class BroadcastResponseMessage(
     src: String,
     dest: String,
-    body: BroadcastResponseBody
-) extends MaelstromMessage
-
-case class BroadcastResponseBody(
     inReplyTo: Int
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 object BroadcastDecoders {
 
@@ -43,7 +33,7 @@ object BroadcastDecoders {
           "body",
           Json.obj(
             ("type", Json.fromString("broadcast_ok")),
-            ("in_reply_to", Json.fromInt(a.body.inReplyTo))
+            ("in_reply_to", Json.fromInt(a.inReplyTo))
           )
         )
       )
@@ -54,36 +44,22 @@ object BroadcastDecoders {
       for {
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        body <- c.downField("body").as[BroadcastBody]
-      } yield BroadcastMessage(src, dest, body)
-  }
-
-  implicit def decodeBody: Decoder[BroadcastBody] = new Decoder[BroadcastBody] {
-    def apply(c: HCursor): Decoder.Result[BroadcastBody] =
-      for {
-        message <- c.downField("message").as[Json]
-        messageId <- c.downField("msg_id").as[Int]
-      } yield BroadcastBody(message, messageId)
+        // body <- c.downField("body").as[BroadcastBody]
+        message <- c.downField("body").downField("message").as[Json]
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+      } yield BroadcastMessage(src, dest, message, messageId)
   }
 }
 
-case class ReadMessage(src: String, dest: String, body: ReadBody)
+case class ReadMessage(src: String, dest: String, messageId: Int)
     extends MaelstromMessage
-
-case class ReadBody(
-    messageId: Int
-) extends MaelstromMessageBody
 
 case class ReadResponseMessage(
     src: String,
     dest: String,
-    body: ReadResponseBody
-) extends MaelstromMessage
-
-case class ReadResponseBody(
     messages: Vector[Json],
     inReplyTo: Int
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 object ReadDecoders {
 
@@ -96,8 +72,8 @@ object ReadDecoders {
           "body",
           Json.obj(
             ("type", Json.fromString("read_ok")),
-            ("in_reply_to", Json.fromInt(a.body.inReplyTo)),
-            ("messages", Json.fromValues(a.body.messages.map(j => j)))
+            ("in_reply_to", Json.fromInt(a.inReplyTo)),
+            ("messages", Json.fromValues(a.messages.map(j => j)))
           )
         )
       )
@@ -108,38 +84,23 @@ object ReadDecoders {
       for {
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        body <- c.downField("body").as[ReadBody]
-      } yield ReadMessage(src, dest, body)
-  }
-
-  implicit def decodeBody: Decoder[ReadBody] = new Decoder[ReadBody] {
-    def apply(c: HCursor): Decoder.Result[ReadBody] = // Right(ReadBody())
-      for {
-        messageId <- c.downField("msg_id").as[Int]
-      } yield ReadBody(messageId)
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+      } yield ReadMessage(src, dest, messageId)
   }
 }
 case class TopologyMessage(
     id: Int,
     src: String,
     dest: String,
-    body: TopologyBody
-) extends MaelstromMessage
-
-case class TopologyBody(
     topology: Map[String, Vector[String]],
     messageId: Int
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 case class TopologyResponseMessage(
     src: String,
     dest: String,
-    body: TopologyResponseBody
-) extends MaelstromMessage
-
-case class TopologyResponseBody(
     inReplyTo: Int
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 object TopologyDecoders {
 
@@ -152,7 +113,7 @@ object TopologyDecoders {
           "body",
           Json.obj(
             ("type", Json.fromString("topology_ok")),
-            ("in_reply_to", Json.fromInt(a.body.inReplyTo))
+            ("in_reply_to", Json.fromInt(a.inReplyTo))
           )
         )
       )
@@ -164,16 +125,9 @@ object TopologyDecoders {
         id <- c.downField("id").as[Int]
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        body <- c.downField("body").as[TopologyBody]
-      } yield TopologyMessage(id, src, dest, body)
-  }
-
-  implicit def decodeBody: Decoder[TopologyBody] = new Decoder[TopologyBody] {
-    def apply(c: HCursor): Decoder.Result[TopologyBody] =
-      for {
-        topology <- c.downField("topology").as[Map[String, Vector[String]]]
-        messageId <- c.downField("msg_id").as[Int]
-      } yield TopologyBody(topology, messageId)
+        topology <- c.downField("body").downField("topology").as[Map[String, Vector[String]]]
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+      } yield TopologyMessage(id, src, dest, topology, messageId)
   }
 }
 
@@ -195,38 +149,37 @@ object Main extends IOApp.Simple {
     (MaelstromMessage, Ref[IO, NodeState[BroadcastNodeState]]),
     IO[Unit]
   ] = {
-    case (BroadcastMessage(src, dest, bbody), nstate) =>
+    case (BroadcastMessage(src, dest, message, messageId), nstate) =>
       nstate.update(current =>
         NodeState(
           current.id,
-          BroadcastNodeState(current.state.messages.appended(bbody.message))
+          BroadcastNodeState(current.state.messages.appended(message))
         )
       ) >>
         respond(
           BroadcastResponseMessage(
             dest,
             src,
-            BroadcastResponseBody(
-              bbody.messageId
-            )
+            messageId
           ).asJson(BroadcastDecoders.encodeResponseMessage).noSpaces
         )
-    case (ReadMessage(src, dest, rbody), nstate) =>
+    case (ReadMessage(src, dest, messageId), nstate) =>
       nstate.get.map(_.state.messages).flatMap { m =>
         respond(
           ReadResponseMessage(
             dest,
             src,
-            ReadResponseBody(m, rbody.messageId)
+            m,
+            messageId
           ).asJson(ReadDecoders.encodeResponseMessage).noSpaces
         )
       }
-    case (TopologyMessage(_, src, dest, tbody), _) =>
+    case (TopologyMessage(_, src, dest, _, messageId), _) =>
       respond(
         TopologyResponseMessage(
           dest,
           src,
-          TopologyResponseBody(tbody.messageId)
+          messageId
         ).asJson(TopologyDecoders.encodeResponseMessage).noSpaces
       )
   }

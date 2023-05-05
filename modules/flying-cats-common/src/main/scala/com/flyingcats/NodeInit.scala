@@ -5,19 +5,18 @@ import io.circe.syntax._
 import io.circe._, io.circe.parser._
 import com.github.flyingcats.common.Messenger._
 
-case class InitMessage(src: String, dest: String, body: InitBody)
-    extends MaelstromMessage
-
-case class InitBody(messageId: Int, nodeId: String, NodeIds: Vector[String])
-    extends MaelstromMessageBody
+case class InitMessage(
+    src: String,
+    dest: String,
+    messageId: Int,
+    nodeId: String,
+    NodeIds: Vector[String]
+) extends MaelstromMessage
 
 case class InitResponseMessage(
     src: String,
-    dest: String,
-    body: InitResponseBody
+    dest: String
 ) extends MaelstromMessage
-
-case class InitResponseBody() extends MaelstromMessageBody
 
 object InitCodecs {
 
@@ -41,17 +40,10 @@ object InitCodecs {
       for {
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        body <- c.downField("body").as[InitBody]
-      } yield InitMessage(src, dest, body)
-  }
-
-  implicit def decodeBody: Decoder[InitBody] = new Decoder[InitBody] {
-    def apply(c: HCursor): Decoder.Result[InitBody] =
-      for {
-        messageId <- c.downField("msg_id").as[Int]
-        nodeId <- c.downField("node_id").as[String]
-        nodeIds <- c.downField("node_ids").as[Vector[String]]
-      } yield InitBody(messageId, nodeId, nodeIds)
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+        nodeId <- c.downField("body").downField("node_id").as[String]
+        nodeIds <- c.downField("body").downField("node_ids").as[Vector[String]]
+      } yield InitMessage(src, dest, messageId, nodeId, nodeIds)
   }
 }
 
@@ -67,13 +59,12 @@ object NodeInit {
     )
     initResponse = InitResponseMessage(
       initMessage.dest,
-      initMessage.src,
-      InitResponseBody()
+      initMessage.src
     )
     _ <- respond(
       initResponse.asJson(InitCodecs.encodeResponseMessage).noSpaces
     )
-    state <- Ref[IO].of(NodeState(initMessage.body.nodeId, initState()))
+    state <- Ref[IO].of(NodeState(initMessage.nodeId, initState()))
   } yield state
 
 }

@@ -4,33 +4,20 @@ import cats.effect.{IO, IOApp}
 import io.circe._
 import io.circe.syntax._
 import cats.syntax.functor._
-import com.github.flyingcats.common.{
-  MaelstromApp,
-  MaelstromMessage,
-  MaelstromMessageBody,
-  MaelstromMessageType
-}
+import com.github.flyingcats.common._
 import com.github.flyingcats.common.Messenger.respond
 import com.github.flyingcats.common.MaelstromMessageType._
 
-case class GenerateMessage(src: String, dest: String, body: GenerateBody)
+case class GenerateMessage(src: String, dest: String, messageId: Int)
     extends MaelstromMessage
-
-case class GenerateBody(
-    messageId: Int
-) extends MaelstromMessageBody
 
 case class GenerateResponseMessage(
     src: String,
     dest: String,
-    body: GenerateResponseBody
-) extends MaelstromMessage
-
-case class GenerateResponseBody(
     messageId: Int,
     inReplyTo: Int,
     id: String
-) extends MaelstromMessageBody
+) extends MaelstromMessage
 
 object GenerateDecoders {
 
@@ -43,9 +30,9 @@ object GenerateDecoders {
           "body",
           Json.obj(
             ("type", Json.fromString("generate_ok")),
-            ("msg_id", Json.fromInt(a.body.messageId)),
-            ("in_reply_to", Json.fromInt(a.body.inReplyTo)),
-            ("id", Json.fromString(a.body.id))
+            ("msg_id", Json.fromInt(a.messageId)),
+            ("in_reply_to", Json.fromInt(a.inReplyTo)),
+            ("id", Json.fromString(a.id))
           )
         )
       )
@@ -56,15 +43,8 @@ object GenerateDecoders {
       for {
         src <- c.downField("src").as[String]
         dest <- c.downField("dest").as[String]
-        body <- c.downField("body").as[GenerateBody]
-      } yield GenerateMessage(src, dest, body)
-  }
-
-  implicit def decodeBody: Decoder[GenerateBody] = new Decoder[GenerateBody] {
-    def apply(c: HCursor): Decoder.Result[GenerateBody] =
-      for {
-        messageId <- c.downField("msg_id").as[Int]
-      } yield GenerateBody(messageId)
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+      } yield GenerateMessage(src, dest, messageId)
   }
 }
 
@@ -75,17 +55,16 @@ object Main extends IOApp.Simple {
         MaelstromMessage
       ]]] = { case Generate => Right(GenerateDecoders.decodeMessage.widen) }
 
-  val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
-    case (GenerateMessage(src, dest, gbody), _) =>
+  val generateMessageResponse
+      : PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
+    case (GenerateMessage(src, dest, messageId), _) =>
       respond(
         GenerateResponseMessage(
           dest,
           src,
-          GenerateResponseBody(
-            gbody.messageId,
-            gbody.messageId,
-            java.util.UUID.randomUUID.toString
-          )
+          messageId,
+          messageId,
+          java.util.UUID.randomUUID.toString
         ).asJson(GenerateDecoders.encodeResponseMessage).noSpaces
       )
   }
@@ -93,5 +72,9 @@ object Main extends IOApp.Simple {
   def initEmptyState(): Unit = ()
 
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(generateDecoder, generateMessageResponse, initEmptyState)
+    MaelstromApp.buildAppLoop(
+      generateDecoder,
+      generateMessageResponse,
+      initEmptyState
+    )
 }

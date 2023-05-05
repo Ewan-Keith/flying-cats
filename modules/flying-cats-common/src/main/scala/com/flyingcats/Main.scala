@@ -8,10 +8,7 @@ import com.github.flyingcats.common.Messenger._
 trait MaelstromMessage {
   val src: String
   val dest: String
-  val body: MaelstromMessageBody
 }
-
-trait MaelstromMessageBody
 
 sealed trait MaelstromMessageType
 object MaelstromMessageType {
