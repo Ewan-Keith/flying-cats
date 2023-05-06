@@ -28,18 +28,20 @@ object MaelstromMessageType {
   case object Generate extends MaelstromMessageType
   case object Topology extends MaelstromMessageType
   case object Broadcast extends MaelstromMessageType
+  case object BroadcastOk extends MaelstromMessageType
   case object Read extends MaelstromMessageType
 
   def getMessageType(
       typeString: String
   ): Either[Throwable, MaelstromMessageType] =
     typeString match {
-      case "init"      => Right(Init)
-      case "echo"      => Right(Echo)
-      case "generate"  => Right(Generate)
-      case "topology"  => Right(Topology)
-      case "broadcast" => Right(Broadcast)
-      case "read"      => Right(Read)
+      case "init"         => Right(Init)
+      case "echo"         => Right(Echo)
+      case "generate"     => Right(Generate)
+      case "topology"     => Right(Topology)
+      case "broadcast"    => Right(Broadcast)
+      case "broadcast_ok" => Right(BroadcastOk)
+      case "read"         => Right(Read)
       case s =>
         Left(new RuntimeException(s"unrecognised Maelstrom message type: $s"))
     }

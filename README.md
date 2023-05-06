@@ -32,9 +32,14 @@ generate-uid:
 ./maelstrom/maelstrom test -w unique-ids --bin ~/Documents/projects/flying-cats/modules/flying-cats-uid/target/native-image/flying-cats-uid --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
 ```
 
-single-node-broadcast
+broadcast 3-a
 ```
 ./maelstrom/maelstrom test -w broadcast --bin ~/Documents/projects/flying-cats/modules/flying-cats-broadcast/target/native-image/flying-cats-broadcast --node-count 1 --time-limit 20 --rate 10
+```
+
+broadcast 3-b
+```
+./maelstrom/maelstrom test -w broadcast --bin ~/Documents/projects/flying-cats/modules/flying-cats-broadcast/target/native-image/flying-cats-broadcast --node-count 5 --time-limit 20 --rate 10
 ```
 
 
