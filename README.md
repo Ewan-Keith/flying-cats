@@ -42,6 +42,11 @@ broadcast 3-b
 ./maelstrom/maelstrom test -w broadcast --bin ~/Documents/projects/flying-cats/modules/flying-cats-broadcast/target/native-image/flying-cats-broadcast --node-count 5 --time-limit 20 --rate 10
 ```
 
+broadcast 3-c
+```
+./maelstrom/maelstrom test -w broadcast --bin ~/Documents/projects/flying-cats/modules/flying-cats-broadcast/target/native-image/flying-cats-broadcast --node-count 5 --time-limit 20 --rate 10 --nemesis partition
+```
+
 
 ### example messages
 init
