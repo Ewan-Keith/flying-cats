@@ -59,6 +59,5 @@ object Main extends IOApp.Simple {
     MaelstromApp.buildAppLoop(
       generateDecoder,
       generateMessageResponse,
-      () => ()
-    )
+      IdOnlyState    )
 }

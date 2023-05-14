@@ -22,16 +22,16 @@ trait MaelstromMessage {
 
 object MaelstromApp {
 
-  private def mainLoop[A](
+  private def mainLoop[A <: NodeState](
       decoderLookup: PartialFunction[
         String,
         Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
-        (MaelstromMessage, Ref[IO, NodeState[A]]),
+        (MaelstromMessage, Ref[IO, A]),
         IO[Unit]
       ],
-      currentState: Ref[IO, NodeState[A]]
+      currentState: Ref[IO, A]
   ): IO[Unit] = {
 
     def getDecoder(messageType: String): IO[Decoder[MaelstromMessage]] =
@@ -80,19 +80,19 @@ object MaelstromApp {
       .drain
   }
 
-  def buildAppLoop[A](
+  def buildAppLoop[A <: NodeState](
       decoderLookup: PartialFunction[
         String,
         Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
-        (MaelstromMessage, Ref[IO, NodeState[A]]),
+        (MaelstromMessage, Ref[IO, A]),
         IO[Unit]
       ],
-      initState: () => A
+      initState: String => A
   ): IO[Unit] =
     NodeInit.initialise(initState).flatMap { iState =>
-      mainLoop(
+      mainLoop[A](
         decoderLookup,
         eventResponse,
         iState

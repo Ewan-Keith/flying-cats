@@ -6,6 +6,7 @@ import io.circe._
 import com.github.flyingcats.common._
 import com.github.flyingcats.common.NodeState
 import com.github.flyingcats.common.Messenger.sendMessage
+import scala.concurrent.duration._
 
 case class BroadcastMessage(
     src: String,
@@ -137,9 +138,28 @@ object Main extends IOApp.Simple {
   import TopologyCodecs._
 
   case class BroadcastNodeState(
+      nodeId: String,
       messages: Vector[Json],
       topology: Map[String, Vector[String]]
-  )
+  ) extends NodeState {
+
+    def getNodeNeighbours(
+    ): Either[Throwable, Vector[String]] = Either.fromOption(
+      topology.get(nodeId),
+      new RuntimeException(
+        s"node ID $nodeId was not found in the provided network topology $topology"
+      )
+    )
+
+    def addMessage(message: Json): BroadcastNodeState =
+      this.copy(messages = messages.appended(message))
+
+    def updateTopology(topology: Map[String, Vector[String]]): BroadcastNodeState =
+      this.copy(topology = topology)
+
+    def forEachNeighbour(action: String => IO[Unit]): IO[Unit] =
+      IO.fromEither(getNodeNeighbours()).flatMap(_.traverse_(action))
+  }
 
   val broadcastDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
     case "broadcast"    => BroadcastCodecs.decodeBroadcastMessage.widen
@@ -150,29 +170,16 @@ object Main extends IOApp.Simple {
 
   def handleNewBroadcastMessage(
       b: BroadcastMessage,
-      nstate: Ref[IO, NodeState[BroadcastNodeState]]
+      nstate: Ref[IO, BroadcastNodeState]
   ): IO[Unit] =
     for {
-      _ <- nstate.update(current =>
-        NodeState(
-          current.id,
-          BroadcastNodeState(
-            current.state.messages.appended(b.message),
-            current.state.topology
-          )
-        )
-      )
+      _ <- nstate.update(_.addMessage(b.message))
       state <- nstate.get
-      nodeNieghbours <- IO.fromOption(state.state.topology.get(state.id))(
-        new RuntimeException(
-          s"node ID ${state.id} was not found in the provided network topology ${state.state.topology}"
-        )
-      )
-      _ <- nodeNieghbours.traverse(dest =>
+      _ <- state.forEachNeighbour(neighbour =>
         sendMessage(
           BroadcastCodecs
             .encodeBroadcastMessage(
-              BroadcastMessage(state.id, dest, b.message, b.messageId)
+              BroadcastMessage(state.nodeId, neighbour, b.message, b.messageId)
             )
             .noSpaces
         )
@@ -180,29 +187,24 @@ object Main extends IOApp.Simple {
     } yield ()
 
   val broadcastMessageResponse: PartialFunction[
-    (MaelstromMessage, Ref[IO, NodeState[BroadcastNodeState]]),
+    (MaelstromMessage, Ref[IO, BroadcastNodeState]),
     IO[Unit]
   ] = {
     case (_: BroadcastOkMessage, _) => IO.unit
     case (b: BroadcastMessage, nstate) =>
       for {
         messageIsNew <- nstate.get.map(
-          !_.state.messages.contains(b.message)
+          !_.messages.contains(b.message)
         )
         _ <- IO.whenA(messageIsNew)(handleNewBroadcastMessage(b, nstate))
         _ <- b.respond(BroadcastOkMessageBody(b.messageId))
       } yield ()
     case (r: ReadMessage, nstate) =>
-      nstate.get.map(_.state.messages).flatMap { m =>
+      nstate.get.map(_.messages).flatMap { m =>
         r.respond(ReadOkMessageBody(m, r.messageId))
       }
     case (t: TopologyMessage, nstate) =>
-      nstate.update(current =>
-        NodeState(
-          current.id,
-          BroadcastNodeState(current.state.messages, t.topology)
-        )
-      ) >>
+      nstate.update(_.updateTopology(t.topology)) >>
         t.respond(TopologyOkMessageBody(t.messageId))
   }
 
@@ -210,6 +212,6 @@ object Main extends IOApp.Simple {
     MaelstromApp.buildAppLoop(
       broadcastDecoder,
       broadcastMessageResponse,
-      () => BroadcastNodeState(Vector.empty, Map.empty)
+      BroadcastNodeState(_, Vector.empty, Map.empty)
     )
 }

@@ -36,20 +36,25 @@ object InitCodecs {
   }
 }
 
-case class NodeState[A](id: String, state: A)
+// case class NodeState[A](id: String, state: A)
+trait NodeState {
+  val nodeId: String
+}
+case class IdOnlyState(nodeId: String) extends NodeState
 
 object NodeInit {
 
   import InitCodecs._
 
-  def initialise[A](initState: () => A): IO[Ref[IO, NodeState[A]]] = for {
+  def initialise[A <: NodeState](initState: String => A): IO[Ref[IO, A]] = for {
     inputString <- IO.readLine
     _ <- logReceived(inputString)
     inputJson <- IO.fromEither(parse(inputString))
     initMessage <- IO.fromEither(
       inputJson.as[InitMessage](InitCodecs.decodeMessage)
     )
-    state <- Ref[IO].of(NodeState(initMessage.nodeId, initState()))
+    state <- Ref[IO].of(initState(initMessage.nodeId))
+    // state <- Ref[IO].of(NodeState(initMessage.nodeId, initState()))
     _ <- initMessage.respond(InitResponse())
   } yield state
 
