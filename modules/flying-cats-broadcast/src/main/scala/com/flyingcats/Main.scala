@@ -214,13 +214,15 @@ object Main extends IOApp.Simple {
       _ <- nstate.update(_.addMessage(b.message))
       state <- nstate.get
       _ <- state.forEachNeighbour(neighbour =>
-        sendMessage(
-          BroadcastCodecs
-            .encodeBroadcastMessage(
-              BroadcastMessage(state.nodeId, neighbour, b.message, b.messageId)
-            )
-            .noSpaces
-        )
+        IO.whenA(neighbour != b.src) {
+          sendMessage(
+            BroadcastCodecs
+              .encodeBroadcastMessage(
+                BroadcastMessage(state.nodeId, neighbour, b.message, b.messageId)
+              )
+              .noSpaces
+          )
+        }
       )
     } yield ()
 
