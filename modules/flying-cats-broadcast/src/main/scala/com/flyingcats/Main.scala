@@ -142,15 +142,11 @@ object Main extends IOApp.Simple {
       topology: Map[String, Vector[String]]
   )
 
-  val broadcastDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-    MaelstromMessage
-  ]]] = {
-    case Broadcast =>
-      Right(BroadcastCodecs.decodeBroadcastMessage.widen)
-    case BroadcastOk =>
-      Right(BroadcastCodecs.decodeBroadcastOkMessage.widen)
-    case Read     => Right(ReadCodecs.decodeReadMessage.widen)
-    case Topology => Right(TopologyCodecs.decodeTopologyMessage.widen)
+  val broadcastDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
+    case Broadcast   => BroadcastCodecs.decodeBroadcastMessage.widen
+    case BroadcastOk => BroadcastCodecs.decodeBroadcastOkMessage.widen
+    case Read        => ReadCodecs.decodeReadMessage.widen
+    case Topology    => TopologyCodecs.decodeTopologyMessage.widen
   }
 
   def handleNewBroadcastMessage(

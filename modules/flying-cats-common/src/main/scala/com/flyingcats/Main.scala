@@ -52,9 +52,7 @@ object MaelstromApp {
   private def mainLoop[A](
       decoderLookup: PartialFunction[
         MaelstromMessageType,
-        Either[Throwable, Decoder[
-          MaelstromMessage
-        ]]
+        Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
         (MaelstromMessage, Ref[IO, NodeState[A]]),
@@ -63,7 +61,6 @@ object MaelstromApp {
       currentState: Ref[IO, NodeState[A]]
   ): IO[Unit] = {
 
-    //todo: why does decoderLookup return Either? can it not just return thedecoder?
     def getDecoder(mtype: MaelstromMessageType): IO[Decoder[MaelstromMessage]] =
       decoderLookup.lift(mtype) match {
         case None =>
@@ -72,7 +69,7 @@ object MaelstromApp {
               s"Received unexpected message type for the module: $mtype"
             )
           )
-        case Some(value) => IO.fromEither(value)
+        case Some(decoder) => IO.pure(decoder)
       }
 
     def react(message: MaelstromMessage): IO[Unit] =
@@ -116,9 +113,7 @@ object MaelstromApp {
   def buildAppLoop[A](
       decoderLookup: PartialFunction[
         MaelstromMessageType,
-        Either[Throwable, Decoder[
-          MaelstromMessage
-        ]]
+        Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
         (MaelstromMessage, Ref[IO, NodeState[A]]),

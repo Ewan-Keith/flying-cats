@@ -44,9 +44,9 @@ object Main extends IOApp.Simple {
 
   import EchoCodecs._
 
-  val echoDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-    MaelstromMessage
-  ]]] = { case Echo => Right(EchoCodecs.decodeEchoMessage.widen) }
+  val echoDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
+    case Echo => EchoCodecs.decodeEchoMessage.widen
+  }
 
   val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (e: EchoMessage, _) =>

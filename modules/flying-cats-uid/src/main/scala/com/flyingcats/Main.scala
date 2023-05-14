@@ -41,9 +41,9 @@ object Main extends IOApp.Simple {
 
   import GenerateCodecs._
 
-  val generateDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-    MaelstromMessage
-  ]]] = { case Generate => Right(GenerateCodecs.decodeGenerateMessage.widen) }
+  val generateDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
+    case Generate => GenerateCodecs.decodeGenerateMessage.widen
+  }
 
   val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (g: GenerateMessage, _) =>
