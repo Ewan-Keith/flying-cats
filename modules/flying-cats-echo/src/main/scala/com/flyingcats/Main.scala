@@ -4,7 +4,6 @@ import cats.effect.{IO, IOApp}
 import io.circe._
 import cats.syntax.functor._
 import com.github.flyingcats.common._
-import com.github.flyingcats.common.MaelstromMessageType._
 
 case class EchoMessage(src: String, dest: String, messageId: Int, echo: String)
     extends MaelstromMessage
@@ -44,8 +43,8 @@ object Main extends IOApp.Simple {
 
   import EchoCodecs._
 
-  val echoDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
-    case Echo => EchoCodecs.decodeEchoMessage.widen
+  val echoDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = { case "echo" =>
+    EchoCodecs.decodeEchoMessage.widen
   }
 
   val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {

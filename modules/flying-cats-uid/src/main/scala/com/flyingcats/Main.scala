@@ -4,7 +4,6 @@ import cats.effect.{IO, IOApp}
 import io.circe._
 import cats.syntax.functor._
 import com.github.flyingcats.common._
-import com.github.flyingcats.common.MaelstromMessageType._
 
 case class GenerateMessage(src: String, dest: String, messageId: Int) extends MaelstromMessage
 
@@ -41,8 +40,8 @@ object Main extends IOApp.Simple {
 
   import GenerateCodecs._
 
-  val generateDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
-    case Generate => GenerateCodecs.decodeGenerateMessage.widen
+  val generateDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
+    case "generate" => GenerateCodecs.decodeGenerateMessage.widen
   }
 
   val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {

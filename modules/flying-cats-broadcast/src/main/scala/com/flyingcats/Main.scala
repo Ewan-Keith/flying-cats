@@ -4,7 +4,6 @@ import cats.effect.{IO, IOApp, Ref}
 import cats.syntax.all._
 import io.circe._
 import com.github.flyingcats.common._
-import com.github.flyingcats.common.MaelstromMessageType._
 import com.github.flyingcats.common.NodeState
 import com.github.flyingcats.common.Messenger.sendMessage
 
@@ -142,11 +141,11 @@ object Main extends IOApp.Simple {
       topology: Map[String, Vector[String]]
   )
 
-  val broadcastDecoder: PartialFunction[MaelstromMessageType, Decoder[MaelstromMessage]] = {
-    case Broadcast   => BroadcastCodecs.decodeBroadcastMessage.widen
-    case BroadcastOk => BroadcastCodecs.decodeBroadcastOkMessage.widen
-    case Read        => ReadCodecs.decodeReadMessage.widen
-    case Topology    => TopologyCodecs.decodeTopologyMessage.widen
+  val broadcastDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
+    case "broadcast"=> BroadcastCodecs.decodeBroadcastMessage.widen
+    case "broadcast_ok" => BroadcastCodecs.decodeBroadcastOkMessage.widen
+    case "read"        => ReadCodecs.decodeReadMessage.widen
+    case "topology"    => TopologyCodecs.decodeTopologyMessage.widen
   }
 
   def handleNewBroadcastMessage(

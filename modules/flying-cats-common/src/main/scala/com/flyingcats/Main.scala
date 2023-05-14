@@ -20,38 +20,11 @@ trait MaelstromMessage {
   )
 }
 
-sealed trait MaelstromMessageType
-object MaelstromMessageType {
-  case object Init extends MaelstromMessageType
-  case object InitOk extends MaelstromMessageType
-  case object Echo extends MaelstromMessageType
-  case object Generate extends MaelstromMessageType
-  case object Topology extends MaelstromMessageType
-  case object Broadcast extends MaelstromMessageType
-  case object BroadcastOk extends MaelstromMessageType
-  case object Read extends MaelstromMessageType
-
-  def getMessageType(
-      typeString: String
-  ): Either[Throwable, MaelstromMessageType] =
-    typeString match {
-      case "init"         => Right(Init)
-      case "echo"         => Right(Echo)
-      case "generate"     => Right(Generate)
-      case "topology"     => Right(Topology)
-      case "broadcast"    => Right(Broadcast)
-      case "broadcast_ok" => Right(BroadcastOk)
-      case "read"         => Right(Read)
-      case s =>
-        Left(new RuntimeException(s"unrecognised Maelstrom message type: $s"))
-    }
-}
-
 object MaelstromApp {
 
   private def mainLoop[A](
       decoderLookup: PartialFunction[
-        MaelstromMessageType,
+        String,
         Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
@@ -61,12 +34,12 @@ object MaelstromApp {
       currentState: Ref[IO, NodeState[A]]
   ): IO[Unit] = {
 
-    def getDecoder(mtype: MaelstromMessageType): IO[Decoder[MaelstromMessage]] =
-      decoderLookup.lift(mtype) match {
+    def getDecoder(messageType: String): IO[Decoder[MaelstromMessage]] =
+      decoderLookup.lift(messageType) match {
         case None =>
           IO.raiseError(
             new RuntimeException(
-              s"Received unexpected message type for the module: $mtype"
+              s"Received unexpected message type for the module: $messageType"
             )
           )
         case Some(decoder) => IO.pure(decoder)
@@ -84,11 +57,8 @@ object MaelstromApp {
       }
 
     def decodeMessage(json: Json): IO[MaelstromMessage] = for {
-      typeString <- IO.fromEither(
-        json.hcursor.downField("body").downField("type").as[String]
-      )
       messageType <- IO.fromEither(
-        MaelstromMessageType.getMessageType(typeString)
+        json.hcursor.downField("body").downField("type").as[String]
       )
       decoder <- getDecoder(messageType)
       message <- IO.fromEither(json.as(decoder))
@@ -112,7 +82,7 @@ object MaelstromApp {
 
   def buildAppLoop[A](
       decoderLookup: PartialFunction[
-        MaelstromMessageType,
+        String,
         Decoder[MaelstromMessage]
       ],
       eventResponse: PartialFunction[
@@ -128,5 +98,4 @@ object MaelstromApp {
         iState
       )
     }
-
 }
