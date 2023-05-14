@@ -16,7 +16,7 @@ case class InitResponse()
 
 object InitCodecs {
 
-  def encodeResponse: Encoder[InitResponse] =
+  implicit def encodeResponse: Encoder[InitResponse] =
     new Encoder[InitResponse] {
       final def apply(a: InitResponse): Json = Json.obj(
         ("type", Json.fromString("init_ok")),
@@ -24,7 +24,7 @@ object InitCodecs {
       )
     }
 
-  def decodeMessage: Decoder[InitMessage] = new Decoder[InitMessage] {
+  implicit def decodeMessage: Decoder[InitMessage] = new Decoder[InitMessage] {
     def apply(c: HCursor): Decoder.Result[InitMessage] =
       for {
         src <- c.downField("src").as[String]
@@ -40,6 +40,8 @@ case class NodeState[A](id: String, state: A)
 
 object NodeInit {
 
+  import InitCodecs._
+
   def initialise[A](initState: () => A): IO[Ref[IO, NodeState[A]]] = for {
     inputString <- IO.readLine
     _ <- logReceived(inputString)
@@ -48,7 +50,7 @@ object NodeInit {
       inputJson.as[InitMessage](InitCodecs.decodeMessage)
     )
     state <- Ref[IO].of(NodeState(initMessage.nodeId, initState()))
-    _ <- initMessage.respond(InitResponse(), InitCodecs.encodeResponse)
+    _ <- initMessage.respond(InitResponse())
   } yield state
 
 }

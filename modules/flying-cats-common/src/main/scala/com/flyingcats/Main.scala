@@ -9,12 +9,12 @@ trait MaelstromMessage {
   val src: String
   val dest: String
 
-  def respond[A](body: A, encoder: Encoder[A]): IO[Unit] = sendMessage(
+  def respond[A](responseBody: A)(implicit bodyEncoder: Encoder[A]): IO[Unit] = sendMessage(
     Json
       .obj(
         ("src", Json.fromString(dest)),
         ("dest", Json.fromString(src)),
-        ("body", encoder(body))
+        ("body", bodyEncoder(responseBody))
       )
       .noSpaces
   )
@@ -63,6 +63,7 @@ object MaelstromApp {
       currentState: Ref[IO, NodeState[A]]
   ): IO[Unit] = {
 
+    //todo: why does decoderLookup return Either? can it not just return thedecoder?
     def getDecoder(mtype: MaelstromMessageType): IO[Decoder[MaelstromMessage]] =
       decoderLookup.lift(mtype) match {
         case None =>

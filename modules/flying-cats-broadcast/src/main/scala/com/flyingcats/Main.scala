@@ -20,19 +20,19 @@ case class BroadcastOkMessage(
     dest: String
 ) extends MaelstromMessage
 
-case class BroadcastResponse(inReplyTo: Int)
+case class BroadcastOkMessageBody(inReplyTo: Int)
 
-object BroadcastDecoders {
+object BroadcastCodecs {
 
-  def encodeResponseMessage: Encoder[BroadcastResponse] =
-    new Encoder[BroadcastResponse] {
-      final def apply(a: BroadcastResponse): Json = Json.obj(
+  implicit def encodeBroadcastOkMessageBody: Encoder[BroadcastOkMessageBody] =
+    new Encoder[BroadcastOkMessageBody] {
+      final def apply(a: BroadcastOkMessageBody): Json = Json.obj(
         ("type", Json.fromString("broadcast_ok")),
         ("in_reply_to", Json.fromInt(a.inReplyTo))
       )
     }
 
-  def encodeBroadcastMessage: Encoder[BroadcastMessage] =
+  implicit def encodeBroadcastMessage: Encoder[BroadcastMessage] =
     new Encoder[BroadcastMessage] {
       final def apply(a: BroadcastMessage): Json = Json.obj(
         ("src", Json.fromString(a.src)),
@@ -48,7 +48,7 @@ object BroadcastDecoders {
       )
     }
 
-  def decodeMessage: Decoder[BroadcastMessage] = new Decoder[BroadcastMessage] {
+  implicit def decodeBroadcastMessage: Decoder[BroadcastMessage] = new Decoder[BroadcastMessage] {
     def apply(c: HCursor): Decoder.Result[BroadcastMessage] =
       for {
         src <- c.downField("src").as[String]
@@ -58,7 +58,7 @@ object BroadcastDecoders {
       } yield BroadcastMessage(src, dest, message, messageId)
   }
 
-  def decodeOkMessage: Decoder[BroadcastOkMessage] =
+  implicit def decodeBroadcastOkMessage: Decoder[BroadcastOkMessage] =
     new Decoder[BroadcastOkMessage] {
       def apply(c: HCursor): Decoder.Result[BroadcastOkMessage] =
         for {
@@ -68,26 +68,25 @@ object BroadcastDecoders {
     }
 }
 
-case class ReadMessage(src: String, dest: String, messageId: Int)
-    extends MaelstromMessage
+case class ReadMessage(src: String, dest: String, messageId: Int) extends MaelstromMessage
 
-case class ReadResponse(
+case class ReadOkMessageBody(
     messages: Vector[Json],
     inReplyTo: Int
 )
 
-object ReadDecoders {
+object ReadCodecs {
 
-  def encodeResponseMessage: Encoder[ReadResponse] =
-    new Encoder[ReadResponse] {
-      final def apply(a: ReadResponse): Json = Json.obj(
+  implicit def encodeReadOkMessageBody: Encoder[ReadOkMessageBody] =
+    new Encoder[ReadOkMessageBody] {
+      final def apply(a: ReadOkMessageBody): Json = Json.obj(
         ("type", Json.fromString("read_ok")),
         ("in_reply_to", Json.fromInt(a.inReplyTo)),
         ("messages", Json.fromValues(a.messages.map(j => j)))
       )
     }
 
-  def decodeMessage: Decoder[ReadMessage] = new Decoder[ReadMessage] {
+  implicit def decodeReadMessage: Decoder[ReadMessage] = new Decoder[ReadMessage] {
     def apply(c: HCursor): Decoder.Result[ReadMessage] =
       for {
         src <- c.downField("src").as[String]
@@ -96,6 +95,7 @@ object ReadDecoders {
       } yield ReadMessage(src, dest, messageId)
   }
 }
+
 case class TopologyMessage(
     id: Int,
     src: String,
@@ -104,19 +104,19 @@ case class TopologyMessage(
     messageId: Int
 ) extends MaelstromMessage
 
-case class TopologyResponse(inReplyTo: Int)
+case class TopologyOkMessageBody(inReplyTo: Int)
 
-object TopologyDecoders {
+object TopologyCodecs {
 
-  def encodeResponseMessage: Encoder[TopologyResponse] =
-    new Encoder[TopologyResponse] {
-      final def apply(a: TopologyResponse): Json = Json.obj(
+  implicit def encodeTopologyOkMessageBody: Encoder[TopologyOkMessageBody] =
+    new Encoder[TopologyOkMessageBody] {
+      final def apply(a: TopologyOkMessageBody): Json = Json.obj(
         ("type", Json.fromString("topology_ok")),
         ("in_reply_to", Json.fromInt(a.inReplyTo))
       )
     }
 
-  def decodeMessage: Decoder[TopologyMessage] = new Decoder[TopologyMessage] {
+  implicit def decodeTopologyMessage: Decoder[TopologyMessage] = new Decoder[TopologyMessage] {
     def apply(c: HCursor): Decoder.Result[TopologyMessage] =
       for {
         id <- c.downField("id").as[Int]
@@ -133,24 +133,27 @@ object TopologyDecoders {
 
 object Main extends IOApp.Simple {
 
+  import ReadCodecs._
+  import BroadcastCodecs._
+  import TopologyCodecs._
+
   case class BroadcastNodeState(
       messages: Vector[Json],
       topology: Map[String, Vector[String]]
   )
 
-  val broadcastDecoder
-      : PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-        MaelstromMessage
-      ]]] = {
+  val broadcastDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
+    MaelstromMessage
+  ]]] = {
     case Broadcast =>
-      Right(BroadcastDecoders.decodeMessage.widen)
+      Right(BroadcastCodecs.decodeBroadcastMessage.widen)
     case BroadcastOk =>
-      Right(BroadcastDecoders.decodeOkMessage.widen)
-    case Read     => Right(ReadDecoders.decodeMessage.widen)
-    case Topology => Right(TopologyDecoders.decodeMessage.widen)
+      Right(BroadcastCodecs.decodeBroadcastOkMessage.widen)
+    case Read     => Right(ReadCodecs.decodeReadMessage.widen)
+    case Topology => Right(TopologyCodecs.decodeTopologyMessage.widen)
   }
 
-  def handleNewMessage(
+  def handleNewBroadcastMessage(
       b: BroadcastMessage,
       nstate: Ref[IO, NodeState[BroadcastNodeState]]
   ): IO[Unit] =
@@ -172,7 +175,7 @@ object Main extends IOApp.Simple {
       )
       _ <- nodeNieghbours.traverse(dest =>
         sendMessage(
-          BroadcastDecoders
+          BroadcastCodecs
             .encodeBroadcastMessage(
               BroadcastMessage(state.id, dest, b.message, b.messageId)
             )
@@ -191,18 +194,12 @@ object Main extends IOApp.Simple {
         messageIsNew <- nstate.get.map(
           !_.state.messages.contains(b.message)
         )
-        _ <- IO.whenA(messageIsNew)(handleNewMessage(b, nstate))
-        _ <- b.respond(
-          BroadcastResponse(b.messageId),
-          BroadcastDecoders.encodeResponseMessage
-        )
+        _ <- IO.whenA(messageIsNew)(handleNewBroadcastMessage(b, nstate))
+        _ <- b.respond(BroadcastOkMessageBody(b.messageId))
       } yield ()
     case (r: ReadMessage, nstate) =>
       nstate.get.map(_.state.messages).flatMap { m =>
-        r.respond(
-          ReadResponse(m, r.messageId),
-          ReadDecoders.encodeResponseMessage
-        )
+        r.respond(ReadOkMessageBody(m, r.messageId))
       }
     case (t: TopologyMessage, nstate) =>
       nstate.update(current =>
@@ -211,21 +208,13 @@ object Main extends IOApp.Simple {
           BroadcastNodeState(current.state.messages, t.topology)
         )
       ) >>
-        t.respond(
-          TopologyResponse(t.messageId),
-          TopologyDecoders.encodeResponseMessage
-        )
+        t.respond(TopologyOkMessageBody(t.messageId))
   }
-
-  def initBroadcastState(): BroadcastNodeState = BroadcastNodeState(
-    Vector.empty,
-    Map.empty
-  )
 
   def run: IO[Unit] =
     MaelstromApp.buildAppLoop(
       broadcastDecoder,
       broadcastMessageResponse,
-      initBroadcastState
+      () => BroadcastNodeState(Vector.empty, Map.empty)
     )
 }

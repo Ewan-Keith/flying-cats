@@ -6,20 +6,19 @@ import cats.syntax.functor._
 import com.github.flyingcats.common._
 import com.github.flyingcats.common.MaelstromMessageType._
 
-case class GenerateMessage(src: String, dest: String, messageId: Int)
-    extends MaelstromMessage
+case class GenerateMessage(src: String, dest: String, messageId: Int) extends MaelstromMessage
 
-case class GenerateResponse(
+case class GenerateOkMessageBody(
     messageId: Int,
     inReplyTo: Int,
     id: String
 )
 
-object GenerateDecoders {
+object GenerateCodecs {
 
-  def encodeResponseBody: Encoder[GenerateResponse] =
-    new Encoder[GenerateResponse] {
-      final def apply(a: GenerateResponse): Json =
+  implicit def encodeGenerateOkMessageBody: Encoder[GenerateOkMessageBody] =
+    new Encoder[GenerateOkMessageBody] {
+      final def apply(a: GenerateOkMessageBody): Json =
         Json.obj(
           ("type", Json.fromString("generate_ok")),
           ("msg_id", Json.fromInt(a.messageId)),
@@ -28,7 +27,7 @@ object GenerateDecoders {
         )
     }
 
-  def decodeMessage: Decoder[GenerateMessage] = new Decoder[GenerateMessage] {
+  implicit def decodeGenerateMessage: Decoder[GenerateMessage] = new Decoder[GenerateMessage] {
     def apply(c: HCursor): Decoder.Result[GenerateMessage] =
       for {
         src <- c.downField("src").as[String]
@@ -40,30 +39,27 @@ object GenerateDecoders {
 
 object Main extends IOApp.Simple {
 
-  val generateDecoder
-      : PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-        MaelstromMessage
-      ]]] = { case Generate => Right(GenerateDecoders.decodeMessage.widen) }
+  import GenerateCodecs._
 
-  val generateMessageResponse
-      : PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
+  val generateDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
+    MaelstromMessage
+  ]]] = { case Generate => Right(GenerateCodecs.decodeGenerateMessage.widen) }
+
+  val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (g: GenerateMessage, _) =>
       g.respond(
-        GenerateResponse(
+        GenerateOkMessageBody(
           g.messageId,
           g.messageId,
           java.util.UUID.randomUUID.toString
-        ),
-        GenerateDecoders.encodeResponseBody
+        )
       )
   }
-
-  def initEmptyState(): Unit = ()
 
   def run: IO[Unit] =
     MaelstromApp.buildAppLoop(
       generateDecoder,
       generateMessageResponse,
-      initEmptyState
+      () => ()
     )
 }

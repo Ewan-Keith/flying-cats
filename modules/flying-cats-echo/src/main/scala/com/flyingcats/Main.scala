@@ -9,17 +9,17 @@ import com.github.flyingcats.common.MaelstromMessageType._
 case class EchoMessage(src: String, dest: String, messageId: Int, echo: String)
     extends MaelstromMessage
 
-case class EchoResponse(
+case class EchoOkMessageBody(
     messageId: Int,
     inReplyTo: Int,
     echo: String
 )
 
-object EchoDecoders {
+object EchoCodecs {
 
-  def encodeResponseMessage: Encoder[EchoResponse] =
-    new Encoder[EchoResponse] {
-      final def apply(a: EchoResponse): Json =
+  implicit def encodeEchoOkMessageBody: Encoder[EchoOkMessageBody] =
+    new Encoder[EchoOkMessageBody] {
+      final def apply(a: EchoOkMessageBody): Json =
         Json.obj(
           ("type", Json.fromString("echo_ok")),
           ("msg_id", Json.fromInt(a.messageId)),
@@ -28,38 +28,37 @@ object EchoDecoders {
         )
     }
 
-  def decodeMessage: Decoder[EchoMessage] = new Decoder[EchoMessage] {
-    def apply(c: HCursor): Decoder.Result[EchoMessage] =
-      for {
-        src <- c.downField("src").as[String]
-        dest <- c.downField("dest").as[String]
-        messageId <- c.downField("body").downField("msg_id").as[Int]
-        echo <- c.downField("body").downField("echo").as[String]
-      } yield EchoMessage(src, dest, messageId, echo)
-  }
+  implicit def decodeEchoMessage: Decoder[EchoMessage] =
+    new Decoder[EchoMessage] {
+      def apply(c: HCursor): Decoder.Result[EchoMessage] =
+        for {
+          src <- c.downField("src").as[String]
+          dest <- c.downField("dest").as[String]
+          messageId <- c.downField("body").downField("msg_id").as[Int]
+          echo <- c.downField("body").downField("echo").as[String]
+        } yield EchoMessage(src, dest, messageId, echo)
+    }
 }
 
 object Main extends IOApp.Simple {
 
-  val echoDecoder
-      : PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
-        MaelstromMessage
-      ]]] = { case Echo => Right(EchoDecoders.decodeMessage.widen) }
+  import EchoCodecs._
+
+  val echoDecoder: PartialFunction[MaelstromMessageType, Either[Throwable, Decoder[
+    MaelstromMessage
+  ]]] = { case Echo => Right(EchoCodecs.decodeEchoMessage.widen) }
 
   val echoMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
     case (e: EchoMessage, _) =>
       e.respond(
-        EchoResponse(
+        EchoOkMessageBody(
           e.messageId,
           e.messageId,
           e.echo
-        ),
-        EchoDecoders.encodeResponseMessage
+        )
       )
   }
 
-  def initEmptyState(): Unit = ()
-
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(echoDecoder, echoMessageResponse, initEmptyState)
+    MaelstromApp.buildAppLoop(echoDecoder, echoMessageResponse, () => ())
 }
