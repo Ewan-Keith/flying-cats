@@ -42,11 +42,12 @@ object Main extends IOApp.Simple {
   }
 
   val broadcastDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
-    case "broadcast"    => BroadcastCodecs.decodeBroadcastMessage.widen
-    case "broadcast_ok" => BroadcastCodecs.decodeBroadcastOkMessage.widen
-    case "read"         => ReadCodecs.decodeReadMessage.widen
-    case "read_ok"      => ReadCodecs.decodeReadOkMessage.widen
-    case "topology"     => TopologyCodecs.decodeTopologyMessage.widen
+    case "broadcast"         => BroadcastCodecs.decodeBroadcastMessage.widen
+    case "broadcast_ok"      => BroadcastCodecs.decodeBroadcastOkMessage.widen
+    case "read"              => ReadCodecs.decodeReadMessage.widen
+    case "read_ok"           => ReadCodecs.decodeReadOkMessage.widen
+    case "topology"          => TopologyCodecs.decodeTopologyMessage.widen
+    case "batched_broadcast" => BatchedBroadcastCodecs.decodeBatchedBroadcastMessage.widen
   }
 
   def handleNewBroadcastMessage(
@@ -59,9 +60,29 @@ object Main extends IOApp.Simple {
       _ <- state.forEachNeighbour(neighbour =>
         IO.whenA(neighbour != b.src) {
           sendMessage(
-            BroadcastCodecs
-              .encodeBroadcastMessage(
-                BroadcastMessage(state.nodeId, neighbour, b.message, b.messageId)
+            BatchedBroadcastCodecs
+              .encodeBatchedBroadcastMessage(
+                BatchedBroadcastMessage(state.nodeId, neighbour, Vector(b.message), b.messageId)
+              )
+              .noSpaces
+          )
+        }
+      )
+    } yield ()
+
+  def handleNewBatchBroadcastMessage(
+      b: BatchedBroadcastMessage,
+      nstate: Ref[IO, BroadcastNodeState]
+  ): IO[Unit] =
+    for {
+      _ <- nstate.update(_.addMessages(b.messages))
+      state <- nstate.get
+      _ <- state.forEachNeighbour(neighbour =>
+        IO.whenA(neighbour != b.src) {
+          sendMessage(
+            BatchedBroadcastCodecs
+              .encodeBatchedBroadcastMessage(
+                BatchedBroadcastMessage(state.nodeId, neighbour, b.messages, b.messageId)
               )
               .noSpaces
           )
@@ -87,6 +108,12 @@ object Main extends IOApp.Simple {
       nstate.get.map(_.messages).flatMap { m =>
         r.respond(ReadOkMessageBody(m, r.messageId))
       }
+    case (b: BatchedBroadcastMessage, nstate) =>
+      for {
+        currentMessages <- nstate.get.map(_.messages)
+        newMessages = b.messages.filter(!currentMessages.contains(_))
+        _ <- IO.whenA(!newMessages.isEmpty)(handleNewBatchBroadcastMessage(b, nstate))
+      } yield ()
     case (t: TopologyMessage, nstate) =>
       nstate.update(_.updateTopology(t.topology)) >>
         t.respond(TopologyOkMessageBody(t.messageId))
