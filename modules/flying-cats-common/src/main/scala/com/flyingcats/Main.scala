@@ -89,13 +89,17 @@ object MaelstromApp {
         (MaelstromMessage, Ref[IO, A]),
         IO[Unit]
       ],
-      initState: String => A
+      initState: String => A,
+      backgroundActions: Ref[IO, A] => IO[Unit]
   ): IO[Unit] =
     NodeInit.initialise(initState).flatMap { iState =>
-      mainLoop[A](
-        decoderLookup,
-        eventResponse,
-        iState
-      )
+      IO.both(
+        backgroundActions(iState),
+        mainLoop[A](
+          decoderLookup,
+          eventResponse,
+          iState
+        )
+      ).void
     }
 }

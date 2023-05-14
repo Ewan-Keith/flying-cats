@@ -7,6 +7,7 @@ import com.github.flyingcats.common._
 import com.github.flyingcats.common.NodeState
 import com.github.flyingcats.common.Messenger.sendMessage
 import scala.concurrent.duration._
+import cats.effect.std.Random
 
 case class BroadcastMessage(
     src: String,
@@ -69,6 +70,13 @@ object BroadcastCodecs {
 }
 
 case class ReadMessage(src: String, dest: String, messageId: Int) extends MaelstromMessage
+case class ReadOkMessage(
+    src: String,
+    dest: String,
+    messages: Vector[Json],
+    messageId: Option[Int],
+    inReplyTo: Int
+) extends MaelstromMessage
 
 case class ReadOkMessageBody(
     messages: Vector[Json],
@@ -86,6 +94,21 @@ object ReadCodecs {
       )
     }
 
+  implicit def encodeReadMessage: Encoder[ReadMessage] =
+    new Encoder[ReadMessage] {
+      final def apply(r: ReadMessage): Json = Json.obj(
+        ("src", Json.fromString(r.src)),
+        ("dest", Json.fromString(r.dest)),
+        (
+          "body",
+          Json.obj(
+            ("type", Json.fromString("read")),
+            ("msg_id", Json.fromInt(r.messageId))
+          )
+        )
+      )
+    }
+
   implicit def decodeReadMessage: Decoder[ReadMessage] = new Decoder[ReadMessage] {
     def apply(c: HCursor): Decoder.Result[ReadMessage] =
       for {
@@ -93,6 +116,17 @@ object ReadCodecs {
         dest <- c.downField("dest").as[String]
         messageId <- c.downField("body").downField("msg_id").as[Int]
       } yield ReadMessage(src, dest, messageId)
+  }
+
+  implicit def decodeReadOkMessage: Decoder[ReadOkMessage] = new Decoder[ReadOkMessage] {
+    def apply(c: HCursor): Decoder.Result[ReadOkMessage] =
+      for {
+        src <- c.downField("src").as[String]
+        dest <- c.downField("dest").as[String]
+        messageId <- c.downField("body").downField("msg_id").as[Option[Int]]
+        messages <- c.downField("body").downField("messages").as[Vector[Json]]
+        inReplyTo <- c.downField("body").downField("in_reply_to").as[Int]
+      } yield ReadOkMessage(src, dest, messages, messageId, inReplyTo)
   }
 }
 
@@ -154,6 +188,9 @@ object Main extends IOApp.Simple {
     def addMessage(message: Json): BroadcastNodeState =
       this.copy(messages = messages.appended(message))
 
+    def addMessages(newMessages: Vector[Json]): BroadcastNodeState =
+      this.copy(messages = messages.concat(newMessages).distinct)
+
     def updateTopology(topology: Map[String, Vector[String]]): BroadcastNodeState =
       this.copy(topology = topology)
 
@@ -165,6 +202,7 @@ object Main extends IOApp.Simple {
     case "broadcast"    => BroadcastCodecs.decodeBroadcastMessage.widen
     case "broadcast_ok" => BroadcastCodecs.decodeBroadcastOkMessage.widen
     case "read"         => ReadCodecs.decodeReadMessage.widen
+    case "read_ok"      => ReadCodecs.decodeReadOkMessage.widen
     case "topology"     => TopologyCodecs.decodeTopologyMessage.widen
   }
 
@@ -190,7 +228,8 @@ object Main extends IOApp.Simple {
     (MaelstromMessage, Ref[IO, BroadcastNodeState]),
     IO[Unit]
   ] = {
-    case (_: BroadcastOkMessage, _) => IO.unit
+    case (_: BroadcastOkMessage, _)   => IO.unit
+    case (rOk: ReadOkMessage, nstate) => nstate.update(_.addMessages(rOk.messages))
     case (b: BroadcastMessage, nstate) =>
       for {
         messageIsNew <- nstate.get.map(
@@ -208,10 +247,24 @@ object Main extends IOApp.Simple {
         t.respond(TopologyOkMessageBody(t.messageId))
   }
 
+  def readNeighboursAfterN(ns: Ref[IO, BroadcastNodeState], interval: Duration): IO[Unit] = {
+    for {
+      _ <- IO.sleep(interval)
+      messageId <- Random.scalaUtilRandom[IO].flatMap(_.nextInt)
+      nodeState <- ns.get
+      _ <- nodeState.forEachNeighbour(neighbourId =>
+        sendMessage(
+          encodeReadMessage(ReadMessage(nodeState.nodeId, neighbourId, messageId)).noSpaces
+        )
+      )
+    } yield ()
+  }.foreverM
+
   def run: IO[Unit] =
     MaelstromApp.buildAppLoop(
       broadcastDecoder,
       broadcastMessageResponse,
-      BroadcastNodeState(_, Vector.empty, Map.empty)
+      BroadcastNodeState(_, Vector.empty, Map.empty),
+      readNeighboursAfterN(_, 2.seconds)
     )
 }
