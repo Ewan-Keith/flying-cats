@@ -142,10 +142,10 @@ object Main extends IOApp.Simple {
   )
 
   val broadcastDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
-    case "broadcast"=> BroadcastCodecs.decodeBroadcastMessage.widen
+    case "broadcast"    => BroadcastCodecs.decodeBroadcastMessage.widen
     case "broadcast_ok" => BroadcastCodecs.decodeBroadcastOkMessage.widen
-    case "read"        => ReadCodecs.decodeReadMessage.widen
-    case "topology"    => TopologyCodecs.decodeTopologyMessage.widen
+    case "read"         => ReadCodecs.decodeReadMessage.widen
+    case "topology"     => TopologyCodecs.decodeTopologyMessage.widen
   }
 
   def handleNewBroadcastMessage(

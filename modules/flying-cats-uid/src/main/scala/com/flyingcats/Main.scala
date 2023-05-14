@@ -40,8 +40,8 @@ object Main extends IOApp.Simple {
 
   import GenerateCodecs._
 
-  val generateDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
-    case "generate" => GenerateCodecs.decodeGenerateMessage.widen
+  val generateDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = { case "generate" =>
+    GenerateCodecs.decodeGenerateMessage.widen
   }
 
   val generateMessageResponse: PartialFunction[(MaelstromMessage, _), IO[Unit]] = {
