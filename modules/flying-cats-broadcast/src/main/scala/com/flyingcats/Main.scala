@@ -50,26 +50,6 @@ object Main extends IOApp.Simple {
     case "batched_broadcast" => BatchedBroadcastCodecs.decodeBatchedBroadcastMessage.widen
   }
 
-  def handleNewBroadcastMessage(
-      b: BroadcastMessage,
-      nstate: Ref[IO, BroadcastNodeState]
-  ): IO[Unit] =
-    for {
-      _ <- nstate.update(_.addMessage(b.message))
-      state <- nstate.get
-      _ <- state.forEachNeighbour(neighbour =>
-        IO.whenA(neighbour != b.src) {
-          sendMessage(
-            BatchedBroadcastCodecs
-              .encodeBatchedBroadcastMessage(
-                BatchedBroadcastMessage(state.nodeId, neighbour, Vector(b.message), b.messageId)
-              )
-              .noSpaces
-          )
-        }
-      )
-    } yield ()
-
   def handleNewBatchBroadcastMessage(
       b: BatchedBroadcastMessage,
       nstate: Ref[IO, BroadcastNodeState]
@@ -101,7 +81,9 @@ object Main extends IOApp.Simple {
         messageIsNew <- nstate.get.map(
           !_.messages.contains(b.message)
         )
-        _ <- IO.whenA(messageIsNew)(handleNewBroadcastMessage(b, nstate))
+        _ <- IO.whenA(messageIsNew)(
+          handleNewBatchBroadcastMessage(b.asBatchedBroadcastMessage, nstate)
+        )
         _ <- b.respond(BroadcastOkMessageBody(b.messageId))
       } yield ()
     case (r: ReadMessage, nstate) =>

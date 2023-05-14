@@ -8,7 +8,11 @@ case class BroadcastMessage(
     dest: String,
     message: Json,
     messageId: Int
-) extends MaelstromMessage
+) extends MaelstromMessage {
+
+  def asBatchedBroadcastMessage: BatchedBroadcastMessage =
+    BatchedBroadcastMessage(src, dest, Vector(message), messageId)
+}
 
 case class BroadcastOkMessage(
     src: String,
