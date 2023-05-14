@@ -20,11 +20,21 @@ object BatchedBroadcastCodecs {
         (
           "body",
           Json.obj(
-            ("type", Json.fromString("broadcast")),
+            ("type", Json.fromString("batched_broadcast")),
             ("messages", Json.fromValues(a.messages)),
             ("msg_id", Json.fromInt(a.messageId))
           )
         )
       )
     }
+
+  implicit def decodeBatchedBroadcastMessage: Decoder[BatchedBroadcastMessage] = new Decoder[BatchedBroadcastMessage] {
+    def apply(c: HCursor): Decoder.Result[BatchedBroadcastMessage] =
+      for {
+        src <- c.downField("src").as[String]
+        dest <- c.downField("dest").as[String]
+        messages <- c.downField("body").downField("messages").as[Vector[Json]]
+        messageId <- c.downField("body").downField("msg_id").as[Int]
+      } yield BatchedBroadcastMessage(src, dest, messages, messageId)
+  }
 }
