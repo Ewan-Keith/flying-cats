@@ -8,8 +8,6 @@ import com.github.flyingcats.common.NodeState
 import com.github.flyingcats.common.Messenger.sendMessage
 import scala.concurrent.duration._
 import cats.effect.std.Random
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 
 object Main extends IOApp.Simple {
   import ReadCodecs._
@@ -19,9 +17,7 @@ object Main extends IOApp.Simple {
   case class BroadcastNodeState(
       nodeId: String,
       messages: Vector[Json],
-      topology: Map[String, Vector[String]],
-      batchBroadcastBuffer: Vector[Json],
-      lastBatchBroadcast: Option[LocalDateTime]
+      topology: Map[String, Vector[String]]
   ) extends NodeState {
 
     def getNodeNeighbours(
@@ -36,42 +32,41 @@ object Main extends IOApp.Simple {
       this.copy(messages = messages.appended(message))
 
     def addMessages(newMessages: Vector[Json]): BroadcastNodeState =
-      this.copy(
-        messages = messages.concat(newMessages).distinct,
-        batchBroadcastBuffer = batchBroadcastBuffer.concat(newMessages).distinct
-      )
+      this.copy(messages = messages.concat(newMessages).distinct)
 
     def updateTopology(topology: Map[String, Vector[String]]): BroadcastNodeState =
       this.copy(topology = topology)
 
     def forEachNeighbour(action: String => IO[Unit]): IO[Unit] =
       IO.fromEither(getNodeNeighbours()).flatMap(_.traverse_(action))
-
-    def isForwardBroadcastDue: Boolean = lastBatchBroadcast match {
-      case None => !batchBroadcastBuffer.isEmpty
-      case Some(dt) =>
-        ChronoUnit.MILLIS.between(dt, LocalDateTime.now()) > 4000 && (!batchBroadcastBuffer.isEmpty)
-    }
-
-    def clearBatchBroadcastBuffer: BroadcastNodeState =
-      this.copy(batchBroadcastBuffer = Vector.empty, lastBatchBroadcast = Some(LocalDateTime.now()))
   }
 
   val broadcastDecoder: PartialFunction[String, Decoder[MaelstromMessage]] = {
-    case "broadcast"         => BroadcastCodecs.decodeBroadcastMessage.widen
-    case "broadcast_ok"      => BroadcastCodecs.decodeBroadcastOkMessage.widen
-    case "read"              => ReadCodecs.decodeReadMessage.widen
-    case "read_ok"           => ReadCodecs.decodeReadOkMessage.widen
-    case "topology"          => TopologyCodecs.decodeTopologyMessage.widen
-    case "batched_broadcast" => BatchedBroadcastCodecs.decodeBatchedBroadcastMessage.widen
+    case "broadcast"    => BroadcastCodecs.decodeBroadcastMessage.widen
+    case "broadcast_ok" => BroadcastCodecs.decodeBroadcastOkMessage.widen
+    case "read"         => ReadCodecs.decodeReadMessage.widen
+    case "read_ok"      => ReadCodecs.decodeReadOkMessage.widen
+    case "topology"     => TopologyCodecs.decodeTopologyMessage.widen
   }
 
-  def handleNewBatchBroadcastMessage(
-      b: BatchedBroadcastMessage,
+  def handleNewBroadcastMessage(
+      b: BroadcastMessage,
       nstate: Ref[IO, BroadcastNodeState]
   ): IO[Unit] =
     for {
-      _ <- nstate.update(_.addMessages(b.messages))
+      _ <- nstate.update(_.addMessage(b.message))
+      state <- nstate.get
+      _ <- state.forEachNeighbour(neighbour =>
+        IO.whenA(neighbour != b.src) {
+          sendMessage(
+            BroadcastCodecs
+              .encodeBroadcastMessage(
+                BroadcastMessage(state.nodeId, neighbour, b.message, b.messageId)
+              )
+              .noSpaces
+          )
+        }
+      )
     } yield ()
 
   val broadcastMessageResponse: PartialFunction[
@@ -85,21 +80,13 @@ object Main extends IOApp.Simple {
         messageIsNew <- nstate.get.map(
           !_.messages.contains(b.message)
         )
-        _ <- IO.whenA(messageIsNew)(
-          handleNewBatchBroadcastMessage(b.asBatchedBroadcastMessage, nstate)
-        )
+        _ <- IO.whenA(messageIsNew)(handleNewBroadcastMessage(b, nstate))
         _ <- b.respond(BroadcastOkMessageBody(b.messageId))
       } yield ()
     case (r: ReadMessage, nstate) =>
       nstate.get.map(_.messages).flatMap { m =>
         r.respond(ReadOkMessageBody(m, r.messageId))
       }
-    case (b: BatchedBroadcastMessage, nstate) =>
-      for {
-        currentMessages <- nstate.get.map(_.messages)
-        newMessages = b.messages.filter(!currentMessages.contains(_))
-        _ <- IO.whenA(!newMessages.isEmpty)(handleNewBatchBroadcastMessage(b, nstate))
-      } yield ()
     case (t: TopologyMessage, nstate) =>
       nstate.update(_.updateTopology(t.topology)) >>
         t.respond(TopologyOkMessageBody(t.messageId))
@@ -118,37 +105,11 @@ object Main extends IOApp.Simple {
     } yield ()
   }.foreverM
 
-  def forwardBatchBroadcastMessages(ns: Ref[IO, BroadcastNodeState]): IO[Unit] = {
-    for {
-      state <- ns.get
-      messageId <- Random.scalaUtilRandom[IO].flatMap(_.nextInt)
-      _ <- IO.whenA(state.isForwardBroadcastDue) {
-        state.forEachNeighbour(neighbour =>
-          sendMessage(
-            BatchedBroadcastCodecs
-              .encodeBatchedBroadcastMessage(
-                BatchedBroadcastMessage(
-                  state.nodeId,
-                  neighbour,
-                  state.batchBroadcastBuffer,
-                  messageId
-                )
-              )
-              .noSpaces
-          )
-        ) >> ns.update(_.clearBatchBroadcastBuffer)
-      }
-    } yield ()
-  }.foreverM
-
-  def initBackroundActions(ns: Ref[IO, BroadcastNodeState]): IO[Unit] =
-    IO.both(readNeighboursAfterN(ns, 2.seconds), forwardBatchBroadcastMessages(ns)).void
-
   def run: IO[Unit] =
     MaelstromApp.buildAppLoop(
       broadcastDecoder,
       broadcastMessageResponse,
-      BroadcastNodeState(_, Vector.empty, Map.empty, Vector.empty, None),
-      initBackroundActions
+      BroadcastNodeState(_, Vector.empty, Map.empty),
+      readNeighboursAfterN(_, 2.seconds)
     )
 }
