@@ -56,8 +56,5 @@ object Main extends IOApp.Simple {
   }
 
   def run: IO[Unit] =
-    MaelstromApp.buildAppLoop(
-      generateDecoder,
-      generateMessageResponse,
-      IdOnlyState    )
+    MaelstromApp.buildAppLoop(generateDecoder, generateMessageResponse, IdOnlyState)
 }

@@ -81,15 +81,15 @@ object Main extends IOApp.Simple {
           !_.messages.contains(b.message)
         )
         _ <- IO.whenA(messageIsNew)(handleNewBroadcastMessage(b, nstate))
-        _ <- b.respond(BroadcastOkMessageBody(b.messageId))
+        _ <- IO.whenA(b.src.startsWith("c"))(b.respond(BroadcastOkMessageBody(b.messageId)))
       } yield ()
     case (r: ReadMessage, nstate) =>
       nstate.get.map(_.messages).flatMap { m =>
-        r.respond(ReadOkMessageBody(m, r.messageId))
+        IO.whenA(r.src.startsWith("c"))(r.respond(ReadOkMessageBody(m, r.messageId)))
       }
     case (t: TopologyMessage, nstate) =>
       nstate.update(_.updateTopology(t.topology)) >>
-        t.respond(TopologyOkMessageBody(t.messageId))
+        IO.whenA(t.src.startsWith("c"))(t.respond(TopologyOkMessageBody(t.messageId)))
   }
 
   def readNeighboursAfterN(ns: Ref[IO, BroadcastNodeState], interval: Duration): IO[Unit] = {
@@ -110,6 +110,6 @@ object Main extends IOApp.Simple {
       broadcastDecoder,
       broadcastMessageResponse,
       BroadcastNodeState(_, Vector.empty, Map.empty),
-      readNeighboursAfterN(_, 2.seconds)
+      readNeighboursAfterN(_, 1.seconds)
     )
 }
